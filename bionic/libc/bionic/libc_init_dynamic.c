@@ -57,9 +57,9 @@
  * This ensures that the function is called by the dynamic linker
  * as soon as the shared library is loaded.
  */
-void __attribute__((constructor)) __libc_prenit(void);
+void __attribute__((constructor)) __libc_preinit(void);
 
-void __libc_prenit(void)
+void __libc_preinit(void)
 {
     /* Read the ELF data pointer form a special slot of the
      * TLS area, then call __libc_init_common with it.
