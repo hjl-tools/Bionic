@@ -1,0 +1,141 @@
+# bionic/arch-x86/bionic/crtbegin_dynamic.S
+#
+# Copyright 2006, The Android Open Source Project
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Google Inc. nor the names of its contributors may
+#       be used to endorse or promote products derived from this software
+#       without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY Google Inc. ``AS IS'' AND ANY EXPRESS OR 
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO 
+# EVENT SHALL Google Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; 
+# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR 
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+	.text
+	.align 16
+	.type _start, @function
+	.globl _start
+
+# this is the small startup code that is first run when
+# any executable that is statically-linked with Bionic
+# runs.
+#
+# it's purpose is to call __libc_init with appropriate
+# arguments, which are:
+#
+#    - the address of the raw data block setup by the Linux
+#      kernel ELF loader
+#
+#    - address of an "onexit" function, not used on any
+#      platform supported by Bionic
+#
+#    - address of the "main" function of the program. We
+#      can't hard-code it in the adr pseudo instruction
+#      so we use a tiny trampoline that will get relocated
+#      by the dynamic linker before this code runs
+#
+#    - address of the constructor list
+#
+
+/* This is the canonical entry point, usually the first thing in the text
+   segment.  The x86-64 psABI says that when the entry
+   point runs, most registers' values are unspecified, except for:
+
+   %rdx		Contains a function pointer to be registered with `atexit'.
+		This is how the dynamic linker arranges to have DT_FINI
+		functions called for shared libraries that have been loaded
+		before this code runs.
+
+   %rsp		The stack contains the arguments and environment:
+		0(%rsp)				argc
+		PTR_SIZE(%rsp)			argv[0]
+		...
+		(PTR_SIZE*argc)(%rsp)		NULL
+		(PTR_SIZE*(argc+1))(%rsp)	envp[0]
+		...
+						NULL
+*/
+
+_start:
+#ifdef __x86_64__
+	/* Extract the arguments as encoded on the stack and set up
+	   the arguments for
+	   
+	   __libc_init (uintptr_t *elfdata, void (*atexit)(void),
+			int (*main) (int, char**, char**),
+			structors_array_t const * const structors);
+	   The arguments are passed via registers
+		elfdata:	%rdi
+		atexit:		%rsi
+		main:		%rdx
+		structors:	%rcx
+	 */
+
+	/* Clear the frame pointer.  The ABI suggests this be done, to mark
+	   the outermost frame obviously.  */
+	xorl	%ebp, %ebp
+	movl	%edx, %esi		# atexit
+	movl	%esp, %edi		# elfdata
+        mov     $0f, %edx		# main
+        mov     $1f, %ecx		# structors
+#else
+        mov     %esp, %eax
+        mov     $1f, %edx
+        pushl   %edx
+        mov     $0f, %edx
+        pushl   %edx
+        mov     $0, %edx
+        pushl   %edx
+        pushl   %eax
+#endif
+        call     __libc_init
+0:
+        jmp   main
+
+1:  .long   __PREINIT_ARRAY__
+    .long   __INIT_ARRAY__
+    .long   __FINI_ARRAY__
+#ifndef NO_CTORS_SECTIONS
+    .long   __CTOR_LIST__
+#endif
+
+# the .ctors section contains a list of pointers to "constructor"
+# functions that need to be called in order during C library initialization,
+# just before the program is being run. This is a C++ requirement
+#
+# the last entry shall be 0, and is defined in crtend.S
+#
+	.section .preinit_array, "aw"
+	.globl __PREINIT_ARRAY__
+__PREINIT_ARRAY__:
+	.long -1
+
+	.section .init_array, "aw"
+	.globl __INIT_ARRAY__
+__INIT_ARRAY__:
+	.long -1
+
+	.section .fini_array, "aw"
+	.globl __FINI_ARRAY__
+__FINI_ARRAY__:
+	.long -1
+
+#ifndef NO_CTORS_SECTIONS
+	.section .ctors, "aw"
+	.globl __CTOR_LIST__
+__CTOR_LIST__:
+	.long -1
+#endif
