@@ -34,6 +34,7 @@ CFLAGS+=-O2 -g
 
 LDFLAGS=-Wl,-z,nocombreloc
 SHLIB_LDFLAGS=-Wl,-Bsymbolic -Wl,-O1 -Wl,--no-undefined
+SHLIB_LDFLAGS+=-Wl,--warn-shared-textrel
 
 OBJCOPY=objcopy
 

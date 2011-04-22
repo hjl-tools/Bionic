@@ -1,5 +1,9 @@
 2011-01-17  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile (SHLIB_LDFLAGS): Add -Wl,--warn-shared-textrel.
+
+2011-01-17  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (SHLIB_LDFLAGS): New.
 	(build-shlib): Use it.
 
