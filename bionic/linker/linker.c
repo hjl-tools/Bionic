@@ -1429,6 +1429,14 @@ static int reloc_library(soinfo *si, Elf32_Rel *rel, unsigned count)
                        (sym_addr - reloc), sym_addr, reloc, sym_name);
             *((unsigned *)reloc) += (unsigned)(sym_addr - reloc);
             break;
+
+        case R_386_COPY:
+            COUNT_RELOC(RELOC_COPY);
+            MARK(rela->r_offset);
+            TRACE_TYPE(RELO, "%5d RELO R_386_COPY %08x <- %d @ %08x %s\n",
+		       pid, reloc, s->st_size, sym_addr, sym_name);
+            memcpy((void*)reloc, (void*)sym_addr, s->st_size);
+            break;
 #endif /* ANDROID_X86_LINKER */
 
 #ifdef ANDROID_ARM_LINKER
