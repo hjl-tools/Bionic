@@ -527,7 +527,6 @@ out_vformat(Out *o, const char *format, va_list args)
             break;
         case 'p':
             bytelen = sizeof(void*);
-            c = format[nn++];
         default:
             ;
         }
