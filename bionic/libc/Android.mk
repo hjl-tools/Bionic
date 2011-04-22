@@ -442,7 +442,12 @@ ifeq ($(TARGET_ARCH),arm)
     libc_common_cflags += -DHAVE_ARM_TLS_REGISTER
   endif
 else # !arm
-libc_crt_target_cflags :=
+ifeq ($(TARGET_ARCH),x86)
+  libc_common_cflags += -DNO_CTORS_SECTIONS
+  libc_crt_target_cflags := -DNO_CTORS_SECTIONS
+else # !x86
+  libc_crt_target_cflags :=
+endif # !x86
 endif # !arm
 
 # Define some common includes
