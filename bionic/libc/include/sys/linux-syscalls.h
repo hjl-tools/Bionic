@@ -3,6 +3,34 @@
 
 #ifdef __x86_64__
 #include <asm/unistd_x32.h>
+#define __NR_chown32 __NR_chown
+#define __NR_fchown32 __NR_fchown
+#define __NR_lchown32 __NR_lchown
+#define __NR_fcntl64 __NR_fcntl
+#define __NR_ugetrlimit __NR_getrlimit
+#define __NR__newselect __NR_select
+#define __NR_getegid32 __NR_getegid
+#define __NR_geteuid32 __NR_geteuid
+#define __NR_getgid32 __NR_getgid
+#define __NR_getuid32 __NR_getuid
+#define __NR_getregid32 __NR_getregid
+#define __NR_getreuid32 __NR_getreuid
+#define __NR_getgid32 __NR_getgid
+#define __NR_getuid32 __NR_getuid
+#define __NR_getresgid32 __NR_getresgid
+#define __NR_getresuid32 __NR_getresuid
+#define __NR_setegid32 __NR_setegid
+#define __NR_seteuid32 __NR_seteuid
+#define __NR_setgid32 __NR_setgid
+#define __NR_setuid32 __NR_setuid
+#define __NR_setregid32 __NR_setregid
+#define __NR_setreuid32 __NR_setreuid
+#define __NR_setresgid32 __NR_setresgid
+#define __NR_setresuid32 __NR_setresuid
+#define __NR_setfsgid32 __NR_setfsgid
+#define __NR_setfsuid32 __NR_setfsuid
+#define __NR_getgroups32 __NR_getgroups
+#define __NR_setgroups32 __NR_setgroups
 #else
 
 #if !defined __ASM_ARM_UNISTD_H && !defined __ASM_I386_UNISTD_H

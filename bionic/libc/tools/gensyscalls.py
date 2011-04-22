@@ -458,6 +458,34 @@ class State:
         # all x32-specific syscalls
         fp.write( "#ifdef __x86_64__\n" );
         fp.write( "#include <asm/unistd_x32.h>\n" );
+        fp.write( "#define __NR_chown32 __NR_chown\n" );
+        fp.write( "#define __NR_fchown32 __NR_fchown\n" );
+        fp.write( "#define __NR_lchown32 __NR_lchown\n" );
+        fp.write( "#define __NR_fcntl64 __NR_fcntl\n" );
+        fp.write( "#define __NR_ugetrlimit __NR_getrlimit\n" );
+        fp.write( "#define __NR__newselect __NR_select\n" );
+        fp.write( "#define __NR_getegid32 __NR_getegid\n" );
+        fp.write( "#define __NR_geteuid32 __NR_geteuid\n" );
+        fp.write( "#define __NR_getgid32 __NR_getgid\n" );
+        fp.write( "#define __NR_getuid32 __NR_getuid\n" );
+        fp.write( "#define __NR_getregid32 __NR_getregid\n" );
+        fp.write( "#define __NR_getreuid32 __NR_getreuid\n" );
+        fp.write( "#define __NR_getgid32 __NR_getgid\n" );
+        fp.write( "#define __NR_getuid32 __NR_getuid\n" );
+        fp.write( "#define __NR_getresgid32 __NR_getresgid\n" );
+        fp.write( "#define __NR_getresuid32 __NR_getresuid\n" );
+        fp.write( "#define __NR_setegid32 __NR_setegid\n" );
+        fp.write( "#define __NR_seteuid32 __NR_seteuid\n" );
+        fp.write( "#define __NR_setgid32 __NR_setgid\n" );
+        fp.write( "#define __NR_setuid32 __NR_setuid\n" );
+        fp.write( "#define __NR_setregid32 __NR_setregid\n" );
+        fp.write( "#define __NR_setreuid32 __NR_setreuid\n" );
+        fp.write( "#define __NR_setresgid32 __NR_setresgid\n" );
+        fp.write( "#define __NR_setresuid32 __NR_setresuid\n" );
+        fp.write( "#define __NR_setfsgid32 __NR_setfsgid\n" );
+        fp.write( "#define __NR_setfsuid32 __NR_setfsuid\n" );
+        fp.write( "#define __NR_getgroups32 __NR_getgroups\n" );
+        fp.write( "#define __NR_setgroups32 __NR_setgroups\n" );
         fp.write( "#else\n\n" );
 
         fp.write( "#if !defined __ASM_ARM_UNISTD_H && !defined __ASM_I386_UNISTD_H\n" )
