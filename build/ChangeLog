@@ -1,3 +1,7 @@
+2011-04-22  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile (CPP_FLAGS): Add -DSHARED.
+
 2011-01-17  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* Makefile (SHLIB_LDFLAGS): Add --fatal-warnings.
