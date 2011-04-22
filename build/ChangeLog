@@ -1,3 +1,11 @@
+2011-01-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile (CFLAGS): Add -O3.
+	(LDFLAGS): New.
+	(build-dynamic-executable): Add $(LDFLAGS).
+	(build-static-executable): Likewise.
+	(build-shlib): Likewise.
+
 2011-01-15  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* Makefile: New.
