@@ -14,7 +14,7 @@ __set_thread_area:
     cmpl    $-129, %eax
     jb      1f
     negl    %eax
-    movl    %eax, %esi
+    movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:

@@ -14,7 +14,7 @@ sched_get_priority_max:
     cmpl    $-129, %eax
     jb      1f
     negl    %eax
-    movl    %eax, %esi
+    movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:

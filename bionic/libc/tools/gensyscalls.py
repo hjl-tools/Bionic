@@ -95,7 +95,7 @@ x32_call = """    movl    $%(idname)s, %%eax
     cmpl    $-129, %%eax
     jb      1f
     negl    %%eax
-    movl    %%eax, %%esi
+    movl    %%eax, %%edi
     call    __set_errno
     orl     $-1, %%eax
 1:

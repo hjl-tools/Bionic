@@ -26,7 +26,7 @@ __pthread_clone:
 
         # an error occured, set errno and return -1
         negl    %eax
-	movl	%eax, %esi
+	movl	%eax, %edi
         call    __set_errno
         orl     $-1, %eax
         jmp     2f
