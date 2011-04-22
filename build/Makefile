@@ -23,7 +23,7 @@ INCLUDES=\
 
 CPP_FLAGS=-Ulinux -D__ANDROID__ -DANDROID -DUSE_SSSE3 -DUSE_SSE2 -DPIC
 ifeq ($(ARCH),x86)
-CFLAGS=-m32 -mbionic
+CFLAGS=-m32
 else
 CFLAGS=-mx32
 endif
@@ -363,7 +363,7 @@ libc_common_src_files += \
 	bionic/pthread-timers.c \
 	bionic/ptrace.c
 
-ifeq ($(ARCH),x86)
+ifeq (X$(ARCH),x86)
 libc_common_src_files+= \
 	arch-$(ARCH)/string/bcopy_wrapper.S \
 	arch-$(ARCH)/string/memcpy_wrapper.S \
