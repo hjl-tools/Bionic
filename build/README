@@ -1,0 +1,4 @@
+This is an x32 port of the Bionic C library from The Android Open
+Source Project.  Only libc is finished.
+
+Please create config.mk defining CC which supports -mx32.
