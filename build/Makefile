@@ -798,19 +798,19 @@ endef
 
 .S.o:
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 .c.o:
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.o: %.S
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.o: %.c
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(LIB_DIR)/%.o: %.S
 	-mkdir -p $(@D)
@@ -818,27 +818,27 @@ $(LIB_DIR)/%.o: %.S
 
 $(LIB_DIR)/crtend_android.o: crtend.S
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 .S.os:
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 .c.os:
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.os: %.S
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.os: %.c
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(LIB_DIR)/%.os: %.S
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(LIB_DIR)/%.so: $(OBJS)
 	-mkdir -p $(@D)
