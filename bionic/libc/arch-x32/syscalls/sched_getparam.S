@@ -7,17 +7,13 @@
     .align 16
 
 sched_getparam:
-    pushq   %rbx
-    mov     %edi, %ebx
-    xchg    %esi, %ecx
     movl    $__NR_sched_getparam, %eax
-    int     $0x80
-    cmpl    $-129, %eax
+    syscall
+    cmp     $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:
-    popq    %rbx
     ret

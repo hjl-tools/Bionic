@@ -7,16 +7,13 @@
     .align 16
 
 inotify_init:
-    pushq   %rbx
-    mov     %edi, %ebx
     movl    $__NR_inotify_init, %eax
-    int     $0x80
-    cmpl    $-129, %eax
+    syscall
+    cmp     $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:
-    popq    %rbx
     ret

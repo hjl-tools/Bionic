@@ -86,7 +86,7 @@ int __set_tls(void *ptr)
     /* this weird computation comes from GLibc */
     segment = _tls_desc.entry_number*8 + 3;
     asm __volatile__ (
-        "   movw %w0, %%gs" :: "q"(segment)
+        "   movw %w0, %%fs" :: "q"(segment)
     );
     return 0;
 }

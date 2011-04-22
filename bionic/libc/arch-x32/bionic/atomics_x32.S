@@ -12,14 +12,11 @@
 .type __futex_wait, @function
 .align 16
 __futex_wait:
-    pushq   %rbx
-    mov     %edi, %ebx           /* ftx */
-    movl    $FUTEX_WAIT, %ecx
+    mov     %edx, %r10d           /* timeout */
     mov     %esi, %edx           /* val */
-    mov     %edx, %esi           /* timeout */
+    movl    $FUTEX_WAIT, %esi
     movl    $__NR_futex, %eax
-    int     $0x80
-    popq    %rbx
+    syscall
     ret
 
 
@@ -30,13 +27,10 @@ __futex_wait:
 .type __futex_wake, @function
 .align 16
 __futex_wake:
-    pushq   %rbx
-    mov     %edi, %ebx           /* ftx */
-    movl    $FUTEX_WAKE, %ecx
     mov     %esi, %edx           /* count */
+    movl    $FUTEX_WAKE, %esi
     movl    $__NR_futex, %eax
-    int     $0x80
-    popq    %rbx
+    syscall
     ret
 
 /* int __futex_syscall3(volatile void *ftx, int op, int count) */
@@ -45,12 +39,8 @@ __futex_wake:
 .type __futex_syscall3, @function
 .align 16
 __futex_syscall3:
-    pushq   %rbx
-    mov     %edi, %ebx           /* ftx */
-    movl    %esi, %ecx      /* op */
     movl    $__NR_futex, %eax
-    int     $0x80
-    popq    %rbx
+    syscall
     ret
 
 /* int __futex_syscall4(volatile void *ftx, int op, int val, const struct timespec *timeout) */
@@ -59,10 +49,6 @@ __futex_syscall3:
 .type __futex_syscall4, @function
 .align 16
 __futex_syscall4:
-    pushq   %rbx
-    mov     %edi, %ebx           /* ftx */
-    xchg    %esi, %ecx		 /* fix op and timeout */
     movl    $__NR_futex, %eax
-    int     $0x80
-    popq    %rbx
+    syscall
     ret

@@ -7,16 +7,13 @@
     .align 16
 
 __set_thread_area:
-    pushq   %rbx
-    mov     %edi, %ebx
     movl    $__NR_set_thread_area, %eax
-    int     $0x80
-    cmpl    $-129, %eax
+    syscall
+    cmp     $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:
-    popq    %rbx
     ret

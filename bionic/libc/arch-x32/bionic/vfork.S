@@ -19,8 +19,8 @@ vfork:
     /* grab the return address */
     popq    %rcx
     movl    $__NR_vfork, %eax
-    int     $0x80
-    cmpl    $-129, %eax
+    syscall
+    cmpl    $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax,%edi

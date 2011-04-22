@@ -19,13 +19,11 @@ _exit_with_stack_teardown:
      * munmap fails, we have to exit. This should probably be fixed, but
      * since ARM side does the same thing, leave it as is.
      */
-    mov     %edi, %ebx             /* stackBase */
-    mov     %esi, %ecx             /* stackSize */
     mov     $__NR_munmap, %eax
-    int     $0x80
-    mov     %edx, %ebx                /* retrieve the retCode */
+    syscall
+    mov     %edx, %edi                /* retrieve the retCode */
     movl    $__NR_exit, %eax
-    int     $0x80
+    syscall
     /* exit does not return */
     /* can't have a ret here since we no longer have a usable stack. Seems
      * that presently, 'hlt' will cause the program to segfault.. but this

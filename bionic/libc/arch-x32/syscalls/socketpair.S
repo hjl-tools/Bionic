@@ -7,17 +7,14 @@
     .align 16
 
 socketpair:
-    pushq   %rbx
-    mov     $8, %ebx
-    mov     %edi, %ecx
-    movl    $__NR_socketcall, %eax
-    int     $0x80
-    cmpl    $-129, %eax
+    mov     %rcx, %r10
+    movl    $__NR_socketpair, %eax
+    syscall
+    cmp     $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:
-    popq    %rbx
     ret

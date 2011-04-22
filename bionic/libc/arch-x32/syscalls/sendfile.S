@@ -7,17 +7,14 @@
     .align 16
 
 sendfile:
-    pushq   %rbx
-    mov     %edi, %ebx
-    xchg    %esi, %ecx
+    mov     %rcx, %r10
     movl    $__NR_sendfile, %eax
-    int     $0x80
-    cmpl    $-129, %eax
+    syscall
+    cmp     $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:
-    popq    %rbx
     ret

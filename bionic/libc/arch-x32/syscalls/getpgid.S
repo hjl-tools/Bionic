@@ -7,16 +7,13 @@
     .align 16
 
 getpgid:
-    pushq   %rbx
-    mov     %edi, %ebx
     movl    $__NR_getpgid, %eax
-    int     $0x80
-    cmpl    $-129, %eax
+    syscall
+    cmp     $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:
-    popq    %rbx
     ret

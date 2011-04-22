@@ -7,17 +7,13 @@
     .align 16
 
 listen:
-    pushq   %rbx
-    mov     $4, %ebx
-    mov     %edi, %ecx
-    movl    $__NR_socketcall, %eax
-    int     $0x80
-    cmpl    $-129, %eax
+    movl    $__NR_listen, %eax
+    syscall
+    cmp     $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:
-    popq    %rbx
     ret

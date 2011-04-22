@@ -20,24 +20,19 @@
     .align 16
 
 syscall:
-    push    %rbp
-    push    %rbx
     mov     %edi,%eax
-    mov     %esi,%ebx
-    xchg    %edx, %ecx
-    mov     %r8d,%esi
-    mov     %r9d,%edi
-    mov     24(%rsp),%ebp
-
-    int     $0x80
-
-    cmpl    $-129, %eax
+    mov     %rsi,%rdi
+    mov     %rdx,%rsi
+    mov     %rcx,%rdx
+    mov     %r8,%r10
+    mov     %r9,%r8
+    mov     8(%rsp),%r9
+    syscall
+    cmp     $-4095, %eax
     jb      1f
     negl    %eax
     movl    %eax, %edi
     call    __set_errno
     orl     $-1, %eax
 1:
-    pop    %rbx
-    pop    %rbp
     ret

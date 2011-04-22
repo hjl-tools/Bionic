@@ -10,17 +10,15 @@
 .type __pthread_clone, @function
 .align 16
 __pthread_clone:
-        pushq   %rbx
-        movl    %edx, %ebx		/* flag */
-
         # insert arguments onto the child stack
 	sub	$24, %esi
 	movq 	%rsi, 16(%rsi)		/* tls */
 	movq 	%rcx, 8(%rsi)		/* arg */
 	movq 	%rdi, (%rsi)		/* fn */
 
+        movl    %edx, %edi
         movl    $__NR_clone, %eax
-        int     $0x80
+	syscall
         test    %eax, %eax
         jns     1f
 
@@ -44,7 +42,6 @@ __pthread_clone:
         hlt
 
 2:
-        popq    %rbx
         ret
 
 /* XXX: TODO: Add __bionic_clone here
