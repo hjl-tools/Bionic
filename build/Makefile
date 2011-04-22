@@ -30,10 +30,11 @@ endif
 CFLAGS+=-fPIC -fno-exceptions $(INCLUDES) $(CPP_FLAGS)
 LIBGCC=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 
-# FIXME: Optimization doesn't work with -mx32.
-#CFLAGS+=-O2
+CFLAGS+=-O2 -g
 
-CFLAGS+=-g
+LDFLAGS=-Wl,-z,nocombreloc
+SHLIB_LDFLAGS=-Wl,-Bsymbolic -Wl,-O1 -Wl,--no-undefined
+SHLIB_LDFLAGS+=-Wl,--warn-shared-textrel,--fatal-warnings
 
 OBJCOPY=objcopy
 
@@ -776,21 +777,21 @@ all: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB) $(EXES)
 	done
 
 define build-dynamic-executable
-$(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-z,nocopyreloc \
+$(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-z,nocopyreloc $(LDFLAGS) \
 	-Wl,-dynamic-linker $(LD.SO) \
 	$(LIB_DIR)/crtbegin_dynamic.o $($(@F)_OBJS) $($(@F)_DEPS) \
 	$(DYNAMIC_LIBC) $(LIB_DIR)/crtend_android.o
 endef
 
 define build-static-executable
-$(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-Bstatic \
+$(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-Bstatic $(LDFLAGS) \
 	$(LIB_DIR)/crtbegin_static.o $($(@F)_OBJS) $($(@F)_DEPS) \
 	$(STATIC_LIBC) $(LIB_DIR)/crtend_android.o
 endef
 
 define build-shlib
-$(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-Bsymbolic,-O1,-soname=$(@F) \
-	-Wl,--no-undefined \
+$(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-soname=$(@F) \
+	$(SHLIB_LDFLAGS) $(LDFLAGS) \
 	$(LIB_DIR)/crtbegin_so.o $($(@F)_OBJS) $(LIB_DIR)/crtend_so.o \
 	$($(@F)_DEPS)
 endef
@@ -799,19 +800,19 @@ endef
 
 .S.o:
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 .c.o:
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.o: %.S
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.o: %.c
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(LIB_DIR)/%.o: %.S
 	-mkdir -p $(@D)
@@ -819,27 +820,27 @@ $(LIB_DIR)/%.o: %.S
 
 $(LIB_DIR)/crtend_android.o: crtend.S
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 .S.os:
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 .c.os:
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.os: %.S
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.os: %.c
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(LIB_DIR)/%.os: %.S
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $< -c -o $@
 
 $(LIB_DIR)/%.so: $(OBJS)
 	-mkdir -p $(@D)
