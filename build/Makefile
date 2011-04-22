@@ -91,7 +91,6 @@ libc_common_src_files := \
 	unistd/issetugid.c \
 	unistd/killpg.c \
 	unistd/lseek64.c \
-	unistd/mmap.c \
 	unistd/nice.c \
 	unistd/open.c \
 	unistd/openat.c \
@@ -376,6 +375,10 @@ libc_common_src_files+= \
 	arch-$(ARCH)/string/strncmp_wrapper.S \
 	arch-$(ARCH)/string/strlen_wrapper.S
 else
+ifeq ($(ARCH),x32)
+libc_common_src_files+= \
+	arch-$(ARCH)/bionic/mmap.S
+endif
 libc_common_src_files+= \
 	string/bcopy.c \
 	string/memcpy.c \

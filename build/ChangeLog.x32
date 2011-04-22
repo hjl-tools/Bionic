@@ -1,5 +1,11 @@
 2011-01-20  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile (libc_common_src_files): Remove unistd/mmap.c.
+	(libc_common_src_files): Add arch-$(ARCH)/bionic/mmap.S for
+	x32.
+
+2011-01-20  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile: Build and run test/pr47383.c.
 
 	* test/pr47383.c: New.

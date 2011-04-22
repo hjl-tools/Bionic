@@ -51,7 +51,6 @@ syscall_src += arch-x32/syscalls/close.S
 syscall_src += arch-x32/syscalls/lseek.S
 syscall_src += arch-x32/syscalls/__llseek.S
 syscall_src += arch-x32/syscalls/getpid.S
-syscall_src += arch-x32/syscalls/__mmap2.S
 syscall_src += arch-x32/syscalls/munmap.S
 syscall_src += arch-x32/syscalls/mremap.S
 syscall_src += arch-x32/syscalls/msync.S
