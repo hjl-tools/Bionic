@@ -251,6 +251,7 @@ double	log1p(double);
 double	logb(double);
 long	lrint(double);
 long	lround(double);
+double	nan(const char *) __pure2;
 double	nextafter(double, double);
 double	remainder(double, double);
 double	remquo(double, double, int *);
@@ -343,6 +344,7 @@ float	erff(float);
 float	erfcf(float);
 float	hypotf(float, float);
 float	lgammaf(float);
+float	tgammaf(float);
 
 float	acoshf(float);
 float	asinhf(float);
@@ -354,6 +356,7 @@ long long llrintf(float);
 long long llroundf(float);
 long	lrintf(float);
 long	lroundf(float);
+float	nanf(const char *) __pure2;
 float	nearbyintf(float);
 float	nextafterf(float, float);
 float	remainderf(float, float);
@@ -479,6 +482,13 @@ long double	tanl(long double);
 long double	tgammal(long double);
 #endif
 long double	truncl(long double);
+
+/* BIONIC: GLibc compatibility - required by the ARM toolchain */
+#ifdef _GNU_SOURCE
+void  sincos(double x, double *sin, double *cos);
+void  sincosf(float x, float *sin, float *cos);
+void  sincosl(long double x, long double *sin, long double *cos);
+#endif
 
 /* #endif */ /* __ISO_C_VISIBLE >= 1999 */
 __END_DECLS

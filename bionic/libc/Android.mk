@@ -11,9 +11,11 @@ libc_common_src_files := \
 	unistd/brk.c \
 	unistd/creat.c \
 	unistd/daemon.c \
+	unistd/eventfd.c \
 	unistd/exec.c \
 	unistd/fcntl.c \
 	unistd/fnmatch.c \
+	unistd/fstatfs.c \
 	unistd/ftime.c \
 	unistd/ftok.c \
 	unistd/getcwd.c \
@@ -63,7 +65,6 @@ libc_common_src_files := \
 	unistd/sleep.c \
 	unistd/statfs.c \
 	unistd/strsignal.c \
-	unistd/sysconf.c \
 	unistd/syslog.c \
 	unistd/system.c \
 	unistd/tcgetpgrp.c \
@@ -186,7 +187,6 @@ libc_common_src_files := \
 	string/strcat.c \
 	string/strchr.c \
 	string/strcoll.c \
-	string/strcpy.c \
 	string/strcspn.c \
 	string/strdup.c \
 	string/strerror.c \
@@ -205,21 +205,50 @@ libc_common_src_files := \
 	string/strtok.c \
 	string/strtotimeval.c \
 	string/strxfrm.c \
+	wchar/wcpcpy.c \
+	wchar/wcpncpy.c \
+	wchar/wcscasecmp.c \
+	wchar/wcscat.c \
+	wchar/wcschr.c \
+	wchar/wcscmp.c \
+	wchar/wcscoll.c \
+	wchar/wcscpy.c \
+	wchar/wcscspn.c \
+	wchar/wcsdup.c \
+	wchar/wcslcat.c \
+	wchar/wcslcpy.c \
+	wchar/wcslen.c \
+	wchar/wcsncasecmp.c \
+	wchar/wcsncat.c \
+	wchar/wcsncmp.c \
+	wchar/wcsncpy.c \
+	wchar/wcsnlen.c \
+	wchar/wcspbrk.c \
+	wchar/wcsrchr.c \
+	wchar/wcsspn.c \
+	wchar/wcsstr.c \
+	wchar/wcstok.c \
+	wchar/wcswidth.c \
+	wchar/wcsxfrm.c \
+	wchar/wmemchr.c \
+	wchar/wmemcmp.c \
+	wchar/wmemcpy.c \
+	wchar/wmemmove.c \
+	wchar/wmemset.c \
 	inet/bindresvport.c \
 	inet/inet_addr.c \
 	inet/inet_aton.c \
 	inet/inet_ntoa.c \
 	inet/inet_ntop.c \
 	inet/inet_pton.c \
+	inet/ether_aton.c \
+	inet/ether_ntoa.c \
 	tzcode/asctime.c \
 	tzcode/difftime.c \
 	tzcode/localtime.c \
 	tzcode/strftime.c \
 	tzcode/strptime.c \
-	bionic/__errno.c \
 	bionic/__set_errno.c \
-	bionic/_rand48.c \
-	bionic/__dso_handle.c \
 	bionic/cpuacct.c \
 	bionic/arc4random.c \
 	bionic/basename.c \
@@ -242,6 +271,10 @@ libc_common_src_files := \
 	bionic/md5.c \
 	bionic/pututline.c \
 	bionic/realpath.c \
+	bionic/sched_getaffinity.c \
+	bionic/sched_getcpu.c \
+	bionic/sched_cpualloc.c \
+	bionic/sched_cpucount.c \
 	bionic/semaphore.c \
 	bionic/sha1.c \
 	bionic/ssp.c \
@@ -286,11 +319,27 @@ libc_common_src_files := \
 	regex/regexec.c \
 	regex/regfree.c \
 
+# The following files are common, but must be compiled
+# with different C flags when building a static C library.
+#
+# The reason for this is the implementation of __get_tls()
+# that will differ between the shared and static versions
+# of the library.
+#
+# See comments in private/bionic_tls.h for more details.
+#
+# NOTE: bionic/pthread.c is added later to this list
+#       because it needs special handling on ARM, see
+#       below.
+#
+libc_static_common_src_files := \
+        unistd/sysconf.c \
+        bionic/__errno.c \
+
 # Architecture specific source files go here
 # =========================================================
 ifeq ($(TARGET_ARCH),arm)
 libc_common_src_files += \
-	bionic/eabi.c \
 	bionic/bionic_clone.c \
 	arch-arm/bionic/__get_pc.S \
 	arch-arm/bionic/__get_sp.S \
@@ -298,6 +347,7 @@ libc_common_src_files += \
 	arch-arm/bionic/_setjmp.S \
 	arch-arm/bionic/atomics_arm.S \
 	arch-arm/bionic/clone.S \
+	arch-arm/bionic/eabi.c \
 	arch-arm/bionic/ffs.S \
 	arch-arm/bionic/kill.S \
 	arch-arm/bionic/libgcc_compat.c \
@@ -309,6 +359,7 @@ libc_common_src_files += \
 	arch-arm/bionic/setjmp.S \
 	arch-arm/bionic/sigsetjmp.S \
 	arch-arm/bionic/strlen.c.arm \
+	arch-arm/bionic/strcpy.S \
 	arch-arm/bionic/syscall.S \
 	string/memmove.c.arm \
 	string/bcopy.c \
@@ -320,9 +371,13 @@ libc_common_src_files += \
 # can set breakpoints in them without messing
 # up any thumb code.
 libc_common_src_files += \
-	bionic/pthread.c.arm \
+	bionic/pthread-atfork.c.arm \
+	bionic/pthread-rwlocks.c.arm \
 	bionic/pthread-timers.c.arm \
 	bionic/ptrace.c.arm
+
+libc_static_common_src_files += \
+        bionic/pthread.c.arm \
 
 # these are used by the static and dynamic versions of the libc
 # respectively
@@ -343,6 +398,7 @@ libc_common_src_files += \
 	arch-x86/bionic/_exit_with_stack_teardown.S \
 	arch-x86/bionic/setjmp.S \
 	arch-x86/bionic/_setjmp.S \
+	arch-x86/bionic/sigsetjmp.S \
 	arch-x86/bionic/vfork.S \
 	arch-x86/bionic/syscall.S \
 	arch-x86/string/bcopy_wrapper.S \
@@ -354,9 +410,14 @@ libc_common_src_files += \
 	arch-x86/string/strcmp_wrapper.S \
 	arch-x86/string/strncmp_wrapper.S \
 	arch-x86/string/strlen_wrapper.S \
-	bionic/pthread.c \
+	string/strcpy.c \
+	bionic/pthread-atfork.c \
+	bionic/pthread-rwlocks.c \
 	bionic/pthread-timers.c \
 	bionic/ptrace.c
+
+libc_static_common_src_files += \
+        bionic/pthread.c \
 
 # this is needed for static versions of libc
 libc_arch_static_src_files := \
@@ -390,11 +451,16 @@ libc_common_src_files += \
 	string/strncmp.c \
 	string/memcmp.c \
 	string/strlen.c \
-	bionic/eabi.c \
-	bionic/pthread.c \
+	string/strcpy.c \
+	bionic/pthread-atfork.c \
+	bionic/pthread-rwlocks.c \
 	bionic/pthread-timers.c \
 	bionic/ptrace.c \
 	unistd/socketcalls.c
+
+libc_static_common_src_files += \
+        bionic/pthread.c \
+
 endif # sh
 
 endif # !x86
@@ -410,7 +476,6 @@ libc_common_cflags := \
 		-D_LIBC=1 			\
 		-DSOFTFLOAT                     \
 		-DFLOATING_POINT		\
-		-DNEED_PSELECT=1		\
 		-DINET6 \
 		-I$(LOCAL_PATH)/private \
 		-DUSE_DL_PREFIX \
@@ -442,8 +507,20 @@ ifeq ($(TARGET_ARCH),arm)
     libc_common_cflags += -DHAVE_ARM_TLS_REGISTER
   endif
 else # !arm
-libc_crt_target_cflags :=
+  libc_crt_target_cflags :=
 endif # !arm
+
+# Define ANDROID_SMP appropriately.
+ifeq ($(TARGET_CPU_SMP),true)
+    libc_common_cflags += -DANDROID_SMP=1
+else
+    libc_common_cflags += -DANDROID_SMP=0
+endif
+
+# Needed to access private/__dso_handle.S from
+# crtbegin_xxx.S and crtend_xxx.S
+#
+libc_crt_target_cflags += -I$(LOCAL_PATH)/private
 
 # Define some common includes
 # ========================================================
@@ -452,16 +529,27 @@ libc_common_c_includes := \
 		$(LOCAL_PATH)/string  \
 		$(LOCAL_PATH)/stdio
 
+# Needed to access private/__dso_handle.S from
+# crtbegin_xxx.S and crtend_xxx.S
+#
+libc_crt_target_cflags += -I$(LOCAL_PATH)/private
 
 # Define the libc run-time (crt) support object files that must be built,
 # which are needed to build all other objects (shared/static libs and
 # executables)
 # ==========================================================================
 
-ifeq ($(TARGET_ARCH),x86)
-# we only need begin_so/end_so for x86, since it needs an appropriate .init
-# section in the shared library with a function to call all the entries in
-# .ctors section. ARM uses init_array, and does not need the function.
+ifneq ($(filter arm x86,$(TARGET_ARCH)),)
+# ARM and x86 need crtbegin_so/crtend_so.
+#
+# For x86, the .init section must point to a function that calls all
+# entries in the .ctors section. (on ARM this is done through the
+# .init_array section instead).
+#
+# For both platforms, the .fini_array section must point to a function
+# that will call __cxa_finalize(&__dso_handle) in order to ensure that
+# static C++ destructors are properly called on dlclose().
+#
 GEN := $(TARGET_OUT_STATIC_LIBRARIES)/crtbegin_so.o
 $(GEN): $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtbegin_so.S
 	@mkdir -p $(dir $@)
@@ -530,10 +618,12 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
 	$(libc_arch_static_src_files) \
+	$(libc_static_common_src_files) \
 	bionic/libc_init_static.c
 
 LOCAL_C_INCLUDES := $(libc_common_c_includes)
-LOCAL_CFLAGS := $(libc_common_cflags)
+LOCAL_CFLAGS := $(libc_common_cflags) \
+                -DLIBC_STATIC
 
 LOCAL_MODULE := libc_nomalloc
 LOCAL_WHOLE_STATIC_LIBRARIES := libc_common
@@ -549,6 +639,7 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
 	$(libc_arch_static_src_files) \
+	$(libc_static_common_src_files) \
 	bionic/dlmalloc.c \
 	bionic/malloc_debug_common.c \
 	bionic/libc_init_static.c
@@ -573,6 +664,7 @@ LOCAL_C_INCLUDES := $(libc_common_c_includes)
 
 LOCAL_SRC_FILES := \
 	$(libc_arch_dynamic_src_files) \
+	$(libc_static_common_src_files) \
 	bionic/dlmalloc.c \
 	bionic/malloc_debug_common.c \
 	bionic/libc_init_dynamic.c

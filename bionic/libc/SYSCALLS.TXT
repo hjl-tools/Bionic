@@ -33,7 +33,7 @@ void    _exit:exit_group (int)      248,252
 void    _exit_thread:exit (int)	    1
 pid_t   __fork:fork (void)           2
 pid_t   _waitpid:waitpid (pid_t, int*, int, struct rusage*)   -1,7
-int     waitid(int, pid_t, struct siginfo_t*, int,void*)          280,284
+int     __waitid:waitid(int, pid_t, struct siginfo_t*, int,void*)          280,284
 
 # NOTE: this system call is never called directly, but we list it there
 #       to have __NR_clone properly defined.
@@ -85,8 +85,8 @@ int     acct(const char*  filepath)  51
 # file descriptors
 ssize_t     read (int, void*, size_t)        3
 ssize_t     write (int, const void*, size_t)       4
-ssize_t     __pread64:pread64 (int, void *, size_t, off_t, off_t) 180
-ssize_t     __pwrite64:pwrite64 (int, void *, size_t, off_t, off_t) 181
+ssize_t     pread64 (int, void *, size_t, off64_t) 180
+ssize_t     pwrite64 (int, void *, size_t, off64_t) 181
 int         __open:open (const char*, int, mode_t)  5
 int         __openat:openat (int, const char*, int, mode_t)  322,295
 int         close (int)                      6
@@ -112,15 +112,18 @@ int         flock(int, int)   143
 int         fchmod(int, mode_t)  94
 int         dup(int)  41
 int         pipe(int *)  42,42,-1
+int         pipe2(int *, int) 359,331
 int         dup2(int, int)   63
 int         select:_newselect(int, struct fd_set *, struct fd_set *, struct fd_set *, struct timeval *)  142
 int         ftruncate(int, off_t)  93
+int         ftruncate64(int, off64_t) 194
 int         getdents:getdents64(unsigned int, struct dirent *, unsigned int)   217,220
 int         fsync(int)  118
+int         fdatasync(int) 148
 int         fchown:fchown32(int, uid_t, gid_t)  207
 void        sync(void)  36
 int         __fcntl64:fcntl64(int, int, void *)  221
-int         fstatfs:fstatfs64(int, size_t, struct statfs *)  267,269
+int         __fstatfs64:fstatfs64(int, size_t, struct statfs *)  267,269
 ssize_t     sendfile(int out_fd, int in_fd, off_t *offset, size_t count)  187
 int         fstatat:fstatat64(int dirfd, const char *path, struct stat *buf, int flags)   327,300
 int         mkdirat(int dirfd, const char *pathname, mode_t mode)  323,296
@@ -227,10 +230,13 @@ int sched_getparam(pid_t pid, struct sched_param *param)  155
 int sched_get_priority_max(int policy)  159
 int sched_get_priority_min(int policy)  160
 int sched_rr_get_interval(pid_t pid, struct timespec *interval)  161
+int sched_setaffinity(pid_t pid, size_t setsize, const cpu_set_t* set) 241
+int __sched_getaffinity:sched_getaffinity(pid_t pid, size_t setsize, cpu_set_t* set)  242
+int __getcpu:getcpu(unsigned *cpu, unsigned *node, void *unused) 345,318,318
 
 # io priorities
-int ioprio_set(int which, int who, int ioprio) 314,289
-int ioprio_get(int which, int who) 315,290
+int ioprio_set(int which, int who, int ioprio) 314,289,288
+int ioprio_get(int which, int who) 315,290,289
 
 # other
 int     uname(struct utsname *)  122
@@ -241,6 +247,7 @@ int     __syslog:syslog(int, char *, int)  103
 int     init_module(void *, unsigned long, const char *)  128
 int     delete_module(const char*, unsigned int)   129
 int     klogctl:syslog(int, char *, int)   103
+int     sysinfo(struct sysinfo *)  116
 
 # futex
 int	futex(void *, int, int, void *, void *, int) 240
@@ -255,6 +262,8 @@ int     inotify_add_watch(int, const char *, unsigned int)  317,292,291
 int     inotify_rm_watch(int, unsigned int)  318,293,292
 
 int     poll(struct pollfd *, unsigned int, long)  168
+
+int     eventfd:eventfd2(unsigned int, int)  356,328
 
 # ARM-specific ARM_NR_BASE == 0x0f0000 == 983040
 int     __set_tls:ARM_set_tls(void*)                                 983045,-1

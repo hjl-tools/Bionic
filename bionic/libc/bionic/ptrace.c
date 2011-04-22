@@ -57,12 +57,7 @@ long ptrace(int request, pid_t pid, void * addr, void * data)
 /*
  * Hook for gdb to get notified when a thread is created
  */
-#ifdef __i386__
-#define ATTRIBUTES __attribute__((noinline)) __attribute__((fastcall))
-#else
-#define ATTRIBUTES __attribute__((noinline))
-#endif
-
-void ATTRIBUTES _thread_created_hook(pid_t thread_id)
+void _thread_created_hook(pid_t thread_id) __attribute__((noinline));
+void _thread_created_hook(pid_t thread_id)
 {
 }

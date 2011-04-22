@@ -50,12 +50,12 @@ int	__sdidinit;
 /*	 p r w flags file _bf z  cookie      close    read    seek    write
 	 ext */
 
-				/* the usual - (stdin + stdout + stderr) */
+/* the usual - (stdin + stdout + stderr) */
 static FILE usual[FOPEN_MAX - 3];
 static struct __sfileext usualext[FOPEN_MAX - 3];
 static struct glue uglue = { 0, FOPEN_MAX - 3, usual };
 
-struct __sfileext __sFext[3];
+static struct __sfileext __sFext[3];
 FILE __sF[3] = {
 	std(__SRD, STDIN_FILENO),		/* stdin */
 	std(__SWR, STDOUT_FILENO),		/* stdout */

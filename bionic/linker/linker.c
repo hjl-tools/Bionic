@@ -48,6 +48,7 @@
 
 #include "linker.h"
 #include "linker_debug.h"
+#include "linker_environ.h"
 #include "linker_format.h"
 
 #include "ba.h"
@@ -58,6 +59,9 @@
 /* Assume average path length of 64 and max 8 paths */
 #define LDPATH_BUFSIZE 512
 #define LDPATH_MAX 8
+
+#define LDPRELOAD_BUFSIZE 512
+#define LDPRELOAD_MAX 8
 
 /* >>> IMPORTANT NOTE - READ ME BEFORE MODIFYING <<<
  *
@@ -112,8 +116,16 @@ static inline int validate_soinfo(soinfo *si)
 static char ldpaths_buf[LDPATH_BUFSIZE];
 static const char *ldpaths[LDPATH_MAX + 1];
 
+static char ldpreloads_buf[LDPRELOAD_BUFSIZE];
+static const char *ldpreload_names[LDPRELOAD_MAX + 1];
+
+static soinfo *preloads[LDPRELOAD_MAX + 1];
+
 int debug_verbosity;
 static int pid;
+
+/* This boolean is set if the program being loaded is setuid */
+static int program_is_setuid;
 
 #if STATS
 struct _link_stats linker_stats;
@@ -278,7 +290,7 @@ static soinfo *alloc_info(const char *name)
 
     /* Make sure we get a clean block of soinfo */
     memset(si, 0, sizeof(soinfo));
-    strcpy((char*) si->name, name);
+    strlcpy((char*) si->name, name, sizeof(si->name));
     sonext->next = si;
     si->ba_index = -1; /* by default, prelinked */
     si->next = NULL;
@@ -306,7 +318,7 @@ static void free_info(soinfo *si)
         return;
     }
 
-    /* prev will never be NULL, because the first entry in solist is 
+    /* prev will never be NULL, because the first entry in solist is
        always the static libdl_info.
     */
     prev->next = si->next;
@@ -443,6 +455,7 @@ _do_lookup(soinfo *si, const char *name, unsigned *base)
     Elf32_Sym *s;
     unsigned *d;
     soinfo *lsi = si;
+    int i;
 
     /* Look for symbols in the local scope first (the object who is
      * searching). This happens with C++ templates on i386 for some
@@ -457,6 +470,14 @@ _do_lookup(soinfo *si, const char *name, unsigned *base)
     if(s != NULL)
         goto done;
 
+    /* Next, look for it in the preloads list */
+    for(i = 0; preloads[i] != NULL; i++) {
+        lsi = preloads[i];
+        s = _elf_lookup(lsi, elf_hash, name);
+        if(s != NULL)
+            goto done;
+    }
+
     for(d = si->dynamic; *d; d += 2) {
         if(d[0] == DT_NEEDED){
             lsi = (soinfo *)d[1];
@@ -469,7 +490,7 @@ _do_lookup(soinfo *si, const char *name, unsigned *base)
             DEBUG("%5d %s: looking up %s in %s\n",
                   pid, si->name, name, lsi->name);
             s = _elf_lookup(lsi, elf_hash, name);
-            if(s != NULL)
+            if ((s != NULL) && (s->st_shndx != SHN_UNDEF))
                 goto done;
         }
     }
@@ -509,13 +530,17 @@ Elf32_Sym *lookup_in_library(soinfo *si, const char *name)
 
 /* This is used by dl_sym().  It performs a global symbol lookup.
  */
-Elf32_Sym *lookup(const char *name, soinfo **found)
+Elf32_Sym *lookup(const char *name, soinfo **found, soinfo *start)
 {
     unsigned elf_hash = elfhash(name);
     Elf32_Sym *s = NULL;
     soinfo *si;
 
-    for(si = solist; (s == NULL) && (si != NULL); si = si->next)
+    if(start == NULL) {
+        start = solist;
+    }
+
+    for(si = start; (s == NULL) && (si != NULL); si = si->next)
     {
         if(si->flags & FLAG_ERROR)
             continue;
@@ -585,8 +610,8 @@ static void dump(soinfo *si)
 #endif
 
 static const char *sopaths[] = {
+    "/vendor/lib",
     "/system/lib",
-    "/lib",
     0
 };
 
@@ -1179,7 +1204,17 @@ init_library(soinfo *si)
 soinfo *find_library(const char *name)
 {
     soinfo *si;
-    const char *bname = strrchr(name, '/');
+    const char *bname;
+
+#if ALLOW_SYMBOLS_FROM_MAIN
+    if (name == NULL)
+        return somain;
+#else
+    if (name == NULL)
+        return NULL;
+#endif
+
+    bname = strrchr(name, '/');
     bname = bname ? bname + 1 : name;
 
     for(si = solist; si != 0; si = si->next){
@@ -1201,8 +1236,8 @@ soinfo *find_library(const char *name)
     return init_library(si);
 }
 
-/* TODO: 
- *   notify gdb of unload 
+/* TODO:
+ *   notify gdb of unload
  *   for non-prelinked libraries, find a way to decrement libbase
  */
 static void call_destructors(soinfo *si);
@@ -1734,14 +1769,14 @@ static int link_image(soinfo *si, unsigned wr_offset)
             }
 #endif
             if (phdr->p_type == PT_LOAD) {
-                /* For the executable, we use the si->size field only in 
-                   dl_unwind_find_exidx(), so the meaning of si->size 
-                   is not the size of the executable; it is the last 
+                /* For the executable, we use the si->size field only in
+                   dl_unwind_find_exidx(), so the meaning of si->size
+                   is not the size of the executable; it is the last
                    virtual address of the loadable part of the executable;
                    since si->base == 0 for an executable, we use the
-                   range [0, si->size) to determine whether a PC value 
+                   range [0, si->size) to determine whether a PC value
                    falls within the executable section.  Of course, if
-                   a value is below phdr->p_vaddr, it's not in the 
+                   a value is below phdr->p_vaddr, it's not in the
                    executable section, but a) we shouldn't be asking for
                    such a value anyway, and b) if we have to provide
                    an EXIDX for such a value, then the executable's
@@ -1896,12 +1931,29 @@ static int link_image(soinfo *si, unsigned wr_offset)
         }
     }
 
-    DEBUG("%5d si->base = 0x%08x, si->strtab = %p, si->symtab = %p\n", 
+    DEBUG("%5d si->base = 0x%08x, si->strtab = %p, si->symtab = %p\n",
            pid, si->base, si->strtab, si->symtab);
 
     if((si->strtab == 0) || (si->symtab == 0)) {
         DL_ERR("%5d missing essential tables", pid);
         goto fail;
+    }
+
+    /* if this is the main executable, then load all of the preloads now */
+    if(si->flags & FLAG_EXE) {
+        int i;
+        memset(preloads, 0, sizeof(preloads));
+        for(i = 0; ldpreload_names[i] != NULL; i++) {
+            soinfo *lsi = find_library(ldpreload_names[i]);
+            if(lsi == 0) {
+                strlcpy(tmp_err_buf, linker_get_error(), sizeof(tmp_err_buf));
+                DL_ERR("%5d could not load needed library '%s' for '%s' (%s)",
+                       pid, ldpreload_names[i], si->name, tmp_err_buf);
+                goto fail;
+            }
+            lsi->refcount++;
+            preloads[i] = lsi;
+        }
     }
 
     for(d = si->dynamic; *d; d += 2) {
@@ -1985,19 +2037,19 @@ static int link_image(soinfo *si, unsigned wr_offset)
     ftp://ftp.freebsd.org/pub/FreeBSD/CERT/advisories/FreeBSD-SA-02:23.stdio.asc
 
      */
-    if (getuid() != geteuid() || getgid() != getegid())
+    if (program_is_setuid)
         nullify_closed_stdio ();
     call_constructors(si);
     notify_gdb_of_load(si);
     return 0;
 
 fail:
-    DL_ERR("failed to link %s\n", si->name);
+    ERROR("failed to link %s\n", si->name);
     si->flags |= FLAG_ERROR;
     return -1;
 }
 
-static void parse_library_path(char *path, char *delim)
+static void parse_library_path(const char *path, char *delim)
 {
     size_t len;
     char *ldpaths_bufp = ldpaths_buf;
@@ -2020,6 +2072,30 @@ static void parse_library_path(char *path, char *delim)
     }
 }
 
+static void parse_preloads(const char *path, char *delim)
+{
+    size_t len;
+    char *ldpreloads_bufp = ldpreloads_buf;
+    int i = 0;
+
+    len = strlcpy(ldpreloads_buf, path, sizeof(ldpreloads_buf));
+
+    while (i < LDPRELOAD_MAX && (ldpreload_names[i] = strsep(&ldpreloads_bufp, delim))) {
+        if (*ldpreload_names[i] != '\0') {
+            ++i;
+        }
+    }
+
+    /* Forget the last path if we had to truncate; this occurs if the 2nd to
+     * last char isn't '\0' (i.e. not originally a delim). */
+    if (i > 0 && len >= sizeof(ldpreloads_buf) &&
+            ldpreloads_buf[sizeof(ldpreloads_buf) - 2] != '\0') {
+        ldpreload_names[i - 1] = NULL;
+    } else {
+        ldpreload_names[i] = NULL;
+    }
+}
+
 int main(int argc, char **argv)
 {
     return 0;
@@ -2038,7 +2114,8 @@ unsigned __linker_init(unsigned **elfdata)
     unsigned *vecs = (unsigned*) (argv + argc + 1);
     soinfo *si;
     struct link_map * map;
-    char *ldpath_env = NULL;
+    const char *ldpath_env = NULL;
+    const char *ldpreload_env = NULL;
 
     /* Setup a temporary TLS area that is used to get a working
      * errno for system calls.
@@ -2062,18 +2139,32 @@ unsigned __linker_init(unsigned **elfdata)
      */
     __tls_area[TLS_SLOT_BIONIC_PREINIT] = elfdata;
 
+    /* Are we setuid? */
+    program_is_setuid = (getuid() != geteuid()) || (getgid() != getegid());
+
+    /* Initialize environment functions, and get to the ELF aux vectors table */
+    vecs = linker_env_init(vecs);
+
+    /* Sanitize environment if we're loading a setuid program */
+    if (program_is_setuid)
+        linker_env_secure();
+
     debugger_init();
 
-        /* skip past the environment */
-    while(vecs[0] != 0) {
-        if(!strncmp((char*) vecs[0], "DEBUG=", 6)) {
-            debug_verbosity = atoi(((char*) vecs[0]) + 6);
-        } else if(!strncmp((char*) vecs[0], "LD_LIBRARY_PATH=", 16)) {
-            ldpath_env = (char*) vecs[0] + 16;
+    /* Get a few environment variables */
+    {
+        const char* env;
+        env = linker_env_get("DEBUG"); /* XXX: TODO: Change to LD_DEBUG */
+        if (env)
+            debug_verbosity = atoi(env);
+
+        /* Normally, these are cleaned by linker_env_secure, but the test
+         * against program_is_setuid doesn't cost us anything */
+        if (!program_is_setuid) {
+            ldpath_env = linker_env_get("LD_LIBRARY_PATH");
+            ldpreload_env = linker_env_get("LD_PRELOAD");
         }
-        vecs++;
     }
-    vecs++;
 
     INFO("[ android linker & debugger ]\n");
     DEBUG("%5d elfdata @ 0x%08x\n", pid, (unsigned)elfdata);
@@ -2101,7 +2192,7 @@ unsigned __linker_init(unsigned **elfdata)
          * is.  Don't use alloc_info(), because the linker shouldn't
          * be on the soinfo list.
          */
-    strcpy((char*) linker_soinfo.name, "/system/bin/linker");
+    strlcpy((char*) linker_soinfo.name, "/system/bin/linker", sizeof linker_soinfo.name);
     linker_soinfo.flags = 0;
     linker_soinfo.base = 0;     // This is the important part; must be zero.
     insert_soinfo_into_debug_map(&linker_soinfo);
@@ -2128,10 +2219,15 @@ unsigned __linker_init(unsigned **elfdata)
     si->dynamic = (unsigned *)-1;
     si->wrprotect_start = 0xffffffff;
     si->wrprotect_end = 0;
+    si->refcount = 1;
 
         /* Use LD_LIBRARY_PATH if we aren't setuid/setgid */
-    if (ldpath_env && getuid() == geteuid() && getgid() == getegid())
+    if (ldpath_env)
         parse_library_path(ldpath_env, ":");
+
+    if (ldpreload_env) {
+        parse_preloads(ldpreload_env, " :");
+    }
 
     if(link_image(si, 0)) {
         char errmsg[] = "CANNOT LINK EXECUTABLE\n";

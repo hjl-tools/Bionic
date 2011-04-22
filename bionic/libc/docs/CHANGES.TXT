@@ -1,7 +1,110 @@
 Bionic ChangeLog:
 -----------------
 
-Differences between current and Android 2.1:
+Differences between current and Android 2.3:
+
+- <android/api-level.h>: Added new header to define __ANDROID_API__ to
+  a constant integer corresponding to the native API level. This header
+  also exists in the NDK's platform headers.
+
+- <sys/cdefs.h>: Include <android/api-level.h>
+
+- <time.h>: Add timegm(), timelocal(), time2posix() and posix2time()
+
+- <sched.h>: Add sched_getcpu(), sched_getaffinity(), sched_setaffinity(),
+  cpu_set_t and related macros (e.g. CPU_SETSIZE, CPU_ZERO, CPU_SET, ...)
+
+- <unistd.h>: Add ftruncate64().
+
+- <signal.h>: Changed the definition of SIGRTMAX to 64. However, note that
+  sigset_t is only 32-bit and cannot deal with real-time signals.
+
+-------------------------------------------------------------------------------
+Differences between Android 2.3 and Android 2.2:
+
+- <pthread.h>: Add reader/writer locks implementation. Add sanity
+  checking to pthread_mutex_destroy() (e.g. a locked mutex will return
+  EBUSY).
+
+- <semaphore.h>: Use private futexes for semaphore implementation,
+  unless your set 'pshared' to non-0 when calling sem_init().
+
+  Also fixed a bug in sem_post() to make it wake up all waiting
+  threads, instead of one. As a consequence, the maximum semaphore
+  value is now reduced to 0x3fffffff.
+
+- <math.h>: Added sincos(), sincosf() and sincosl() (GLibc compatibility).
+
+- <sys/sysinfo.h>: Added missing sysinfo() system call implementation
+  (the function was already declared in the header though).
+
+- sysconf() didn't work for some arguments due to a small bug in the
+  /proc line parser.
+
+- <termio.h>: added missing header (just includes <termios.h>)
+
+- <unistd.h>: add missing declaration for truncate(). The implementation
+  was already here since Android 1.5.
+
+  modify implementation of alarm() to return 0 in case of error (i.e.
+  if a value larger than 0x7fffffff seconds is passed to it). This
+  makes the implementation compliant with the GLibc behaviour.
+
+- <wchar.h>: small fixes to really support wchar_t in Bionic (not there yet).
+
+     the size of wchar_t is still 32-bit (decided by the compiler)
+
+     WCHAR_MIN: changed from 0 to INT_MIN
+     WCHAR_MAX: changed from 255 to INT_MAX
+
+     wcpcpy(), wcpncpy(), wcscat(), wcschr(), wcscmp(),
+     wcscpy(), wcscspn(), wcsdup(), wcslcat(), wcslcpy(),
+     wcslen(), wcsncat(), wcsncmp(), wcsncpy(), wcsnlen(),
+     wcspbrk(), wcsrchr(), wcsrchr(), wcsspn(), wcsstr(),
+     wcstok(), wcswidth(), wmemchr(), wmemcmp(), wmemcpy(),
+     wmemmove(), wmemset(): Added proper implementations.
+
+     wcscasecmp(), wcsncasecmp(): Added implementation limited
+     to ASCII codes for lower/upper.
+
+     wcscoll(): added dummy implementation that calls wcscmp()
+     wcsxfrm(): added dummy implementation that calls wcsncpy()
+
+  NOTE: Technically, this breaks the ABI, but we never claimed to support
+        wchar_t anyway. The wchar_t support is still *NOT* official at this
+        point. We need better multi-byte support code, and wprintf/wscanf
+        stuff too.
+
+- <inttypes.h>: add missing declarations for strntoimax abd strntoumax.
+
+- <stdlib.h>: add missing declarations for drand48() and erand48().
+
+- clearerr(): fix broken implementation.
+
+- Feature test macros like _POSIX_C_SOURCE / _XOPEN_SOURCE / _C99_SOURCE
+  are now handled correctly by our C library headers (see <sys/cdefs.h>)
+
+- <sys/select.h>: add missing declaration for pselect()
+
+- <sys/vfs.h>: fixed implementation of fstatfs() (also fixes fpathconf()
+  which uses it).
+
+- Added an implementation of pthread_atfork()
+
+- <dlfcn.h>: fixed dlopen() implementation to support dlopen(NULL, ...).
+  This allows one to look at the dynamic symbols exported by an executable.
+
+- <private/bionic_tls.h>: use kernel helper functions for static versions
+  of the C library. This is necessary because we don't know where the corresponding
+  machine code is going to run, and the optimization for __get_tls() might
+  not match the features of the target device where we run a static executable
+  linked to the C library. This fixes one of the bug that explains why gdbserver
+  didn't work well with threads.
+
+-------------------------------------------------------------------------------
+Differences between Android 2.2. and Android 2.1:
+
+- Support FP register save/load in setjmp()/longjmp() on ARMv7 builds.
 
 - Add support for SH-4 CPU architecture !
 

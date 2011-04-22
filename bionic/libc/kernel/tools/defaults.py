@@ -43,6 +43,11 @@ kernel_default_arch_macros = {
     "x86": {"__i386__": "1"},
     }
 
+# Replace tokens in the output according to this mapping
+kernel_token_replacements = {
+    {"asm": "__asm__"},
+    }
+
 # this is the set of known static inline functions that we want to keep
 # in the final ARM headers. this is only used to keep optimized byteswapping
 # static functions and stuff like that.
@@ -71,6 +76,7 @@ kernel_known_generic_statics = set(
           "__cmsg_nxthdr",                    # linux/socket.h
           "cmsg_nxthdr",                      # linux/socket.h
           "ipt_get_target",
+          "ip6t_get_target",
         ]
     )
 
