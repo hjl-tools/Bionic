@@ -65,7 +65,9 @@ _start:
 1:  .long   __PREINIT_ARRAY__
     .long   __INIT_ARRAY__
     .long   __FINI_ARRAY__
+#ifndef NO_CTORS_SECTIONS
     .long   __CTOR_LIST__
+#endif
 
 # the .ctors section contains a list of pointers to "constructor"
 # functions that need to be called in order during C library initialization,
@@ -88,8 +90,9 @@ __INIT_ARRAY__:
 __FINI_ARRAY__:
 	.long -1
 
+#ifndef NO_CTORS_SECTIONS
 	.section .ctors, "aw"
 	.globl __CTOR_LIST__
 __CTOR_LIST__:
 	.long -1
-
+#endif

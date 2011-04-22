@@ -44,9 +44,10 @@ _start:
         popl   %esp
         jmp    *%eax
 
+#ifndef NO_CTORS_SECTIONS
 .section .ctors, "wa"
 .globl __CTOR_LIST__
 
 __CTOR_LIST__:
         .long -1
-
+#endif

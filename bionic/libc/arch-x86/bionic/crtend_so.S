@@ -1,3 +1,4 @@
+#ifndef NO_CTORS_SECTIONS
 .text
 .align 4
 .type __bionic_call_ctors, @function
@@ -39,6 +40,7 @@ __bionic_call_ctors:
 .type __CTOR_END__, @object
 __CTOR_END__:
     .long 0
+#endif
 
 .section .init_array, "aw"
     .long 0
