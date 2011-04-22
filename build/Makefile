@@ -35,6 +35,7 @@ CFLAGS+=-O2 -g
 LDFLAGS=-Wl,-z,nocombreloc
 SHLIB_LDFLAGS=-Wl,-Bsymbolic -Wl,-O1 -Wl,--no-undefined
 SHLIB_LDFLAGS+=-Wl,--warn-shared-textrel,--fatal-warnings
+DYNAMIC_LDFLAGS=-Wl,-z,nocopyreloc 
 
 OBJCOPY=objcopy
 
@@ -762,11 +763,9 @@ EXES+=$(hello.dynamic_EXE)
 
 VPATH+=test
 
-ifeq ($(ARCH),x32)
 OBJS=$(X32OBJS)
 SHARED_LIBS=$(X32SHARED_LIBS)
 STATIC_LIBS=$(X32STATIC_LIBS)
-endif
 
 #$(init-mixed_OBJS): CFLAGS+=-O0 -g
 
@@ -777,7 +776,7 @@ all: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB) $(EXES)
 	done
 
 define build-dynamic-executable
-$(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-z,nocopyreloc $(LDFLAGS) \
+$(CC) $(CFLAGS) -o $@ -nostdlib $(DYNAMIC_LDFLAGS) $(LDFLAGS) \
 	-Wl,-dynamic-linker $(LD.SO) \
 	$(LIB_DIR)/crtbegin_dynamic.o $($(@F)_OBJS) $($(@F)_DEPS) \
 	$(DYNAMIC_LIBC) $(LIB_DIR)/crtend_android.o

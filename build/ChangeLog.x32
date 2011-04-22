@@ -1,4 +1,10 @@
 2011-01-17  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile (DYNAMIC_LDFLAGS): New.
+	(build-dynamic-executable): Use it.
+	Only build x32 files.
+
+2011-01-17  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (CFLAGS): Remove -mbionic.
 	(libc_common_src_files): Disable x86 string functions.
