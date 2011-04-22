@@ -42,3 +42,8 @@ void*  memset(void*  dst, int c, size_t n)
 
   return dst;
 }
+
+void bzero(void*  dst, size_t n)
+{
+  memset (dst, 0, n);
+}
