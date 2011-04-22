@@ -48,7 +48,6 @@ syscall_src += arch-x32/syscalls/__pwrite64.S
 syscall_src += arch-x32/syscalls/__open.S
 syscall_src += arch-x32/syscalls/__openat.S
 syscall_src += arch-x32/syscalls/close.S
-syscall_src += arch-x32/syscalls/lseek.S
 syscall_src += arch-x32/syscalls/__llseek.S
 syscall_src += arch-x32/syscalls/getpid.S
 syscall_src += arch-x32/syscalls/munmap.S

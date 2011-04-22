@@ -413,7 +413,12 @@ class State:
             syscall_params = t["params"]
             syscall_name   = t["name"]
 
-	    if t["id"] == -2 or (t["id"] >= 0 and t["id"] < 4096 and t["id"] != 190 and t["id"] != 192):
+	    if t["id"] == -2 \
+	       or (t["id"] >= 0 \
+	           and t["id"] < 4096 \
+		   and t["id"] != 19 \
+		   and t["id"] != 190 \
+		   and t["id"] != 192):
 		t["asm-x32"] = self.x32_genstub(syscall_func,len(syscall_params),"__NR_"+syscall_name)
             if t["id"] >= 0:
                 if gen_thumb_stubs:

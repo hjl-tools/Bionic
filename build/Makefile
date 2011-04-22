@@ -90,7 +90,6 @@ libc_common_src_files := \
 	unistd/isatty.c \
 	unistd/issetugid.c \
 	unistd/killpg.c \
-	unistd/lseek64.c \
 	unistd/nice.c \
 	unistd/open.c \
 	unistd/openat.c \
@@ -375,10 +374,6 @@ libc_common_src_files+= \
 	arch-$(ARCH)/string/strncmp_wrapper.S \
 	arch-$(ARCH)/string/strlen_wrapper.S
 else
-ifeq ($(ARCH),x32)
-libc_common_src_files+= \
-	arch-$(ARCH)/bionic/mmap.S
-endif
 libc_common_src_files+= \
 	string/bcopy.c \
 	string/memcpy.c \
@@ -388,6 +383,15 @@ libc_common_src_files+= \
 	string/strcmp.c \
 	string/strncmp.c \
 	string/strlen.c
+endif
+
+ifeq ($(ARCH),x32)
+libc_common_src_files+= \
+	arch-$(ARCH)/bionic/lseek.S \
+	arch-$(ARCH)/bionic/mmap.S 
+else
+libc_common_src_files+= \
+	unistd/lseek64.c
 endif
 
 # this is needed for static versions of libc
