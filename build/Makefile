@@ -33,6 +33,7 @@ LIBGCC=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 CFLAGS+=-O2 -g
 
 LDFLAGS=-Wl,-z,nocombreloc
+SHLIB_LDFLAGS=-Wl,-Bsymbolic -Wl,-O1 -Wl,--no-undefined
 
 OBJCOPY=objcopy
 
@@ -788,8 +789,8 @@ $(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-Bstatic $(LDFLAGS) \
 endef
 
 define build-shlib
-$(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-Bsymbolic,-O1,-soname=$(@F) \
-	-Wl,--no-undefined $(LDFLAGS) \
+$(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-soname=$(@F) \
+	$(SHLIB_LDFLAGS) $(LDFLAGS) \
 	$(LIB_DIR)/crtbegin_so.o $($(@F)_OBJS) $(LIB_DIR)/crtend_so.o \
 	$($(@F)_DEPS)
 endef
