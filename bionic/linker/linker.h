@@ -122,13 +122,13 @@ struct soinfo
     Elf32_Rel *rel;
     unsigned rel_count;
 
-#ifdef ANDROID_SH_LINKER
+#if defined(ANDROID_X32_LINKER) || defined(ANDROID_SH_LINKER)
     Elf32_Rela *plt_rela;
     unsigned plt_rela_count;
 
     Elf32_Rela *rela;
     unsigned rela_count;
-#endif /* ANDROID_SH_LINKER */
+#endif /* ANDROID_X32_LINKER || ANDROID_SH_LINKER */
 
     unsigned *preinit_array;
     unsigned preinit_array_count;
@@ -187,6 +187,14 @@ extern soinfo libdl_info;
 #define R_386_JUMP_SLOT  7
 #define R_386_RELATIVE   8
 
+#elif defined(ANDROID_X32_LINKER)
+
+#define R_X86_64_32         10
+#define R_X86_64_PC32       2
+#define R_X86_64_GLOB_DAT   6
+#define R_X86_64_JUMP_SLOT  7
+#define R_X86_64_RELATIVE   8
+
 #elif defined(ANDROID_SH_LINKER)
 
 #define R_SH_DIR32      1
@@ -232,7 +240,9 @@ const char *linker_get_error(void);
 #ifdef ANDROID_ARM_LINKER 
 typedef long unsigned int *_Unwind_Ptr;
 _Unwind_Ptr dl_unwind_find_exidx(_Unwind_Ptr pc, int *pcount);
-#elif defined(ANDROID_X86_LINKER) || defined(ANDROID_SH_LINKER)
+#elif defined(ANDROID_X86_LINKER) \
+      || defined(ANDROID_X32_LINKER) \
+      || defined(ANDROID_SH_LINKER)
 int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, size_t, void *), void *);
 #endif
 

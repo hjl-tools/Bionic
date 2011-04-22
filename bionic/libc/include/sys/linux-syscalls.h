@@ -183,7 +183,7 @@
 #define __NR_ARM_cacheflush               (__NR_SYSCALL_BASE + 983042)
 #endif
 
-#ifdef __i386__
+#if defined(__i386__) || defined(__x86_64__)
 #define __NR_exit_group                   (__NR_SYSCALL_BASE + 252)
 #define __NR_waitpid                      (__NR_SYSCALL_BASE + 7)
 #define __NR_waitid                       (__NR_SYSCALL_BASE + 284)
