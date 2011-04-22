@@ -1551,6 +1551,14 @@ static int reloc_library_a(soinfo *si, Elf32_Rela *rela, unsigned count)
 					      + (rela->r_addend - reloc));
             break;
 
+        case R_X86_64_COPY:
+            COUNT_RELOC(RELOC_COPY);
+            MARK(rela->r_offset);
+            TRACE_TYPE(RELO, "%5d RELO R_X86_64_COPY %08x <- %d @ %08x %s\n",
+		       pid, reloc, s->st_size, sym_addr, sym_name);
+            memcpy((void*)reloc, (void*)sym_addr, s->st_size);
+            break;
+
 #elif defined(ANDROID_SH_LINKER)
         case R_SH_JUMP_SLOT:
             COUNT_RELOC(RELOC_ABSOLUTE);
