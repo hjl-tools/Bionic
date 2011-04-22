@@ -417,6 +417,7 @@ class State:
 	       or (t["id"] >= 0 \
 	           and t["id"] < 4096 \
 		   and t["id"] != 19 \
+		   and t["id"] != 140 \
 		   and t["id"] != 190 \
 		   and t["id"] != 192):
 		t["asm-x32"] = self.x32_genstub(syscall_func,len(syscall_params),"__NR_"+syscall_name)
