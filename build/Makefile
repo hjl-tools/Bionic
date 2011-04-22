@@ -30,7 +30,7 @@ endif
 CFLAGS+=-fPIC -fno-exceptions $(INCLUDES) $(CPP_FLAGS)
 LIBGCC=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 
-CFLAGS+=-O2 -g
+CFLAGS+=-g -O2
 
 LDFLAGS=-Wl,-z,nocombreloc
 SHLIB_LDFLAGS=-Wl,-Bsymbolic -Wl,-O1 -Wl,--no-undefined
@@ -760,6 +760,19 @@ hello.dynamic_OBJS=$(hello_OBJS)
 hello.dynamic_EXE=hello.dynamic
 hello.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(hello.dynamic_EXE))
 EXES+=$(hello.dynamic_EXE)
+
+pr47383_OBJS=pr47383.o
+pr47383_OBJS:=$(addprefix $(OBJ_DIR)/, $(pr47383_OBJS))
+OBJS+=$(pr47383_OBJS)
+X32OBJS+=$(pr47383_OBJS)
+pr47383.static_OBJS=$(pr47383_OBJS)
+pr47383.static_EXE=pr47383.static
+pr47383.static_EXE:=$(addprefix $(EXE_DIR)/, $(pr47383.static_EXE))
+EXES+=$(pr47383.static_EXE)
+pr47383.dynamic_OBJS=$(pr47383_OBJS)
+pr47383.dynamic_EXE=pr47383.dynamic
+pr47383.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(pr47383.dynamic_EXE))
+EXES+=$(pr47383.dynamic_EXE)
 
 VPATH+=test
 
