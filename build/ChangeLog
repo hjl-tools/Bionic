@@ -1,3 +1,20 @@
+2011-04-23  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile (INCLUDES): Add -I$(BIONIC_LIBC_DIR)/private.
+	(CPP_FLAGS): -DANDROID_SMP=1.
+	($(crt_OBJS):CFLAGS): Remove -DNO_CTORS_SECTIONS.
+	(LINKER_CFLAGS): Likewise.
+	(libdl.so_LDFLAGS): New.
+	(libc_static_common_src_files): New.
+	(libc_common_src_files): Updated for UMG AOSP 20110422.
+	(libc_common_cflags): Remove -DNEED_PSELECT=1 and
+	-DNO_CTORS_SECTIONS.
+	(libc_nomalloc_src_files): Add $(libc_static_common_src_files).
+	(libc.so_src_files): Likewise.
+	(LINKER_SRC_FILES): Add linker_environ.c.  Remove
+	socket_local_client.c.
+	($(LIB_DIR)/libdl.so): New.
+
 2011-04-22  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* Makefile (CPP_FLAGS): Add -DSHARED.

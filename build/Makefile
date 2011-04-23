@@ -16,6 +16,7 @@ INCLUDES=\
 	-I$(BIONIC_LIBC_DIR)/arch-$(ARCH)/include \
 	-I$(BIONIC_LIBC_DIR)/include \
 	-I$(BIONIC_LIBC_DIR)/kernel/arch-$(ARCH) \
+	-I$(BIONIC_LIBC_DIR)/private \
 	-I$(BIONIC_LIBC_DIR)/kernel \
 	-I$(BIONIC_LIBC_DIR)/kernel/common \
 	-I$(BIONIC_LIBM_DIR)/include \
@@ -23,6 +24,7 @@ INCLUDES=\
 
 CPP_FLAGS=-Ulinux -D__ANDROID__ -DANDROID -DUSE_SSSE3 -DUSE_SSE2 -DPIC
 CPP_FLAGS+=-DSHARED
+CPP_FLAGS+=-DANDROID_SMP=1
 ifeq ($(ARCH),x86)
 CFLAGS=-m32
 else
@@ -52,8 +54,6 @@ OBJS+=$(crt_OBJS)
 X32OBJS+=$(crt_OBJS)
 VPATH+=$(BIONIC_LIBC_DIR)/arch-$(ARCH)/bionic
 
-$(crt_OBJS): CFLAGS += -DNO_CTORS_SECTIONS
-
 libdl.so_OBJS=libdl.os
 libdl.so_OBJS:=$(addprefix $(OBJ_DIR)/, $(libdl.so_OBJS))
 OBJS+=$(libdl.so_OBJS)
@@ -64,7 +64,27 @@ SHARED_LIBS+=$(libdl.so_LIB)
 X32SHARED_LIBS+=$(libdl.so_LIB)
 VPATH+=$(BIONIC_LIBDL_DIR)
 
+libdl.so_LDFLAGS=-Wl,-Bsymbolic -Wl,-O1
+libdl.so_LDFLAGS+=-Wl,--warn-shared-textrel,--fatal-warnings
+
 include $(BIONIC_LIBC_DIR)/arch-$(ARCH)/syscalls.mk
+
+# The following files are common, but must be compiled
+# with different C flags when building a static C library.
+#
+# The reason for this is the implementation of __get_tls()
+# that will differ between the shared and static versions
+# of the library.
+#
+# See comments in private/bionic_tls.h for more details.
+#
+# NOTE: bionic/pthread.c is added later to this list
+#       because it needs special handling on ARM, see
+#       below.
+#
+libc_static_common_src_files := \
+        unistd/sysconf.c \
+        bionic/__errno.c \
 
 # Define the common source files for all the libc instances
 # =========================================================
@@ -75,9 +95,11 @@ libc_common_src_files := \
 	unistd/brk.c \
 	unistd/creat.c \
 	unistd/daemon.c \
+	unistd/eventfd.c \
 	unistd/exec.c \
 	unistd/fcntl.c \
 	unistd/fnmatch.c \
+	unistd/fstatfs.c \
 	unistd/ftime.c \
 	unistd/ftok.c \
 	unistd/getcwd.c \
@@ -125,7 +147,6 @@ libc_common_src_files := \
 	unistd/sleep.c \
 	unistd/statfs.c \
 	unistd/strsignal.c \
-	unistd/sysconf.c \
 	unistd/syslog.c \
 	unistd/system.c \
 	unistd/tcgetpgrp.c \
@@ -248,7 +269,6 @@ libc_common_src_files := \
 	string/strcat.c \
 	string/strchr.c \
 	string/strcoll.c \
-	string/strcpy.c \
 	string/strcspn.c \
 	string/strdup.c \
 	string/strerror.c \
@@ -267,21 +287,50 @@ libc_common_src_files := \
 	string/strtok.c \
 	string/strtotimeval.c \
 	string/strxfrm.c \
+	wchar/wcpcpy.c \
+	wchar/wcpncpy.c \
+	wchar/wcscasecmp.c \
+	wchar/wcscat.c \
+	wchar/wcschr.c \
+	wchar/wcscmp.c \
+	wchar/wcscoll.c \
+	wchar/wcscpy.c \
+	wchar/wcscspn.c \
+	wchar/wcsdup.c \
+	wchar/wcslcat.c \
+	wchar/wcslcpy.c \
+	wchar/wcslen.c \
+	wchar/wcsncasecmp.c \
+	wchar/wcsncat.c \
+	wchar/wcsncmp.c \
+	wchar/wcsncpy.c \
+	wchar/wcsnlen.c \
+	wchar/wcspbrk.c \
+	wchar/wcsrchr.c \
+	wchar/wcsspn.c \
+	wchar/wcsstr.c \
+	wchar/wcstok.c \
+	wchar/wcswidth.c \
+	wchar/wcsxfrm.c \
+	wchar/wmemchr.c \
+	wchar/wmemcmp.c \
+	wchar/wmemcpy.c \
+	wchar/wmemmove.c \
+	wchar/wmemset.c \
 	inet/bindresvport.c \
 	inet/inet_addr.c \
 	inet/inet_aton.c \
 	inet/inet_ntoa.c \
 	inet/inet_ntop.c \
 	inet/inet_pton.c \
+	inet/ether_aton.c \
+	inet/ether_ntoa.c \
 	tzcode/asctime.c \
 	tzcode/difftime.c \
 	tzcode/localtime.c \
 	tzcode/strftime.c \
 	tzcode/strptime.c \
-	bionic/__errno.c \
 	bionic/__set_errno.c \
-	bionic/_rand48.c \
-	bionic/__dso_handle.c \
 	bionic/cpuacct.c \
 	bionic/arc4random.c \
 	bionic/basename.c \
@@ -304,6 +353,10 @@ libc_common_src_files := \
 	bionic/md5.c \
 	bionic/pututline.c \
 	bionic/realpath.c \
+	bionic/sched_getaffinity.c \
+	bionic/sched_getcpu.c \
+	bionic/sched_cpualloc.c \
+	bionic/sched_cpucount.c \
 	bionic/semaphore.c \
 	bionic/sha1.c \
 	bionic/ssp.c \
@@ -359,6 +412,9 @@ libc_common_src_files += \
 	arch-$(ARCH)/bionic/_setjmp.S \
 	arch-$(ARCH)/bionic/vfork.S \
 	arch-$(ARCH)/bionic/syscall.S \
+	string/strcpy.c \
+	bionic/pthread-atfork.c \
+	bionic/pthread-rwlocks.c \
 	bionic/pthread.c \
 	bionic/pthread-timers.c \
 	bionic/ptrace.c
@@ -413,11 +469,9 @@ libc_common_cflags := \
 		-D_LIBC=1 			\
 		-DSOFTFLOAT                     \
 		-DFLOATING_POINT		\
-		-DNEED_PSELECT=1		\
 		-DINET6 \
 		-I$(BIONIC_LIBC_DIR)/private \
 		-DUSE_DL_PREFIX \
-		-DNO_CTORS_SECTIONS \
 		-DPOSIX_MISTAKE
 
 # these macro definitions are required to implement the
@@ -450,6 +504,7 @@ malloc_src_files=\
 
 libc_nomalloc_src_files := \
 	$(libc_common_src_files) \
+	$(libc_static_common_src_files) \
 	$(libc_arch_static_src_files) \
 	bionic/libc_init_static.c
 libc_nomalloc.a_OBJS=$(addsuffix .os, $(basename $(libc_nomalloc_src_files)))
@@ -484,6 +539,7 @@ libc.so_cflags := $(libc_common_cflags)
 
 libc.so_src_files := \
 	$(libc_common_src_files) \
+	$(libc_static_common_src_files) \
 	$(libc_arch_dynamic_src_files) \
 	$(malloc_src_files) \
 	bionic/libc_init_dynamic.c
@@ -685,12 +741,12 @@ libm.so_DEPS=$(libc.so_LIB)
 LINKER_SRC_FILES:= \
 	arch/$(ARCH)/begin.S \
 	linker.c \
+	linker_environ.c \
 	linker_format.c \
 	rt.c \
 	dlfcn.c \
 	debugger.c \
-	ba.c \
-	socket_local_client.c
+	ba.c
 
 # This is aligned to 4K page boundary so that both GNU ld and gold work.  Gold
 # actually produces a correct binary with starting address 0xB0000100 but the
@@ -706,7 +762,6 @@ LINKER_AREA_SIZE := 0x01000000
 ld.so_LDFLAGS := -Wl,-Ttext,$(LINKER_TEXT_BASE)
 
 LINKER_CFLAGS += -DPRELINK
-LINKER_CFLAGS += -DNO_CTORS_SECTIONS
 LINKER_CFLAGS += -DLINKER_TEXT_BASE=$(LINKER_TEXT_BASE)
 LINKER_CFLAGS += -DLINKER_AREA_SIZE=$(LINKER_AREA_SIZE)
 
@@ -878,6 +933,13 @@ $(LIB_DIR)/ld.so: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS)
 	$(CC) $(CFLAGS) $($(@F)_LDFLAGS) -o $@ -nostdlib -Wl,-Bstatic \
 		 $($(@F)_OBJS) $($(@F)_DEPS) $(LIB_DIR)/crtend_android.o
 	$(OBJCOPY) --prefix-symbols=__dl_ $@
+
+$(LIB_DIR)/libdl.so: $(OBJS)
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-soname=$(@F) \
+	  $($(@F)_LDFLAGS) \
+	  $(LIB_DIR)/crtbegin_so.o $($(@F)_OBJS) $(LIB_DIR)/crtend_so.o \
+	  $($(@F)_DEPS)
 
 $(EXE_DIR)/%.static: $(OBJS) $(STATIC_LIBS)
 	-mkdir -p $(@D)
