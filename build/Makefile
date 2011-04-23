@@ -8,7 +8,6 @@ BIONIC_LINKER_DIR=$(BIONIC_DIR)/linker
 
 CORE_DIR=$(PWD)/../core
 CORE_INCLUDE_DIR=$(CORE_DIR)/include
-CORE_LIBCUTILS_DIR=$(CORE_DIR)/libcutils
 
 ARCH?=x32
 
@@ -792,7 +791,7 @@ ld.so_DEPS=\
 	$(libc_nomalloc.a_LIB) \
 	$(LIBGCC) \
 	-Wl,--end-group
-VPATH+=$(BIONIC_LINKER_DIR) $(CORE_LIBCUTILS_DIR)
+VPATH+=$(BIONIC_LINKER_DIR)
 
 $(ld.so_OBJS): CFLAGS += $(LINKER_CFLAGS)
 

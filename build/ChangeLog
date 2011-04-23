@@ -1,5 +1,10 @@
 2011-04-23  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile (CORE_LIBCUTILS_DIR): Removed.
+	(VPATH): Remove $(CORE_LIBCUTILS_DIR).
+
+2011-04-23  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (INCLUDES): Add -I$(BIONIC_LIBC_DIR)/private.
 	(CPP_FLAGS): -DANDROID_SMP=1.
 	($(crt_OBJS):CFLAGS): Remove -DNO_CTORS_SECTIONS.
