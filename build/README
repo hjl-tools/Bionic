@@ -1,4 +1,4 @@
-This is an x32 port of the Bionic C library from The Android Open
-Source Project.  Only libc is finished.
+This is a Linux native port of the Bionic C/C++ library from the Android
+Open Source Project (AOSP).
 
-Please create config.mk defining CC which supports -mx32.
+Please create config.mk to set CC to GCC targeting Android/x86.

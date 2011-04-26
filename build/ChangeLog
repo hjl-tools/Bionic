@@ -1,5 +1,9 @@
 2011-04-26  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* README: Updated.
+
+2011-04-26  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (ARCH): Default to x86.
 
 2011-04-26  H.J. Lu  <hongjiu.lu@intel.com>
