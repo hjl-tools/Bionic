@@ -5,6 +5,7 @@ BIONIC_LIBC_DIR=$(BIONIC_DIR)/libc
 BIONIC_LIBM_DIR=$(BIONIC_DIR)/libm
 BIONIC_LIBDL_DIR=$(BIONIC_DIR)/libdl
 BIONIC_LINKER_DIR=$(BIONIC_DIR)/linker
+BIONIC_LIBSTDCXX_DIR=$(BIONIC_DIR)/libstdc++
 
 CORE_DIR=$(PWD)/../core
 CORE_INCLUDE_DIR=$(CORE_DIR)/include
@@ -31,6 +32,7 @@ CFLAGS=-mx32
 endif
 CFLAGS+=-fPIC -fno-exceptions $(INCLUDES) $(CPP_FLAGS)
 LIBGCC=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+LIBSUPCXX?=$(shell $(CC) $(CFLAGS) -print-file-name=libsupc++.a)
 
 CFLAGS+=-g -O2
 
@@ -737,6 +739,48 @@ libm.so_LIB:=$(addprefix $(LIB_DIR)/, $(libm.so_LIB))
 SHARED_LIBS+=$(libm.so_LIB)
 libm.so_DEPS=$(libc.so_LIB)
 
+libstdc++_common_src_files := \
+	src/one_time_construction.cpp \
+	src/new.cpp \
+	src/pure_virtual.cpp \
+	src/typeinfo.cpp
+
+VPATH+=$(BIONIC_LIBSTDCXX_DIR)
+
+libstdc++_common_cflags := -I$(BIONIC_LIBC_DIR)/private
+libstdc++_common_cflags += -I$(BIONIC_LIBSTDCXX_DIR)/include
+libstdc++_common_cflags += -DANDROID_SMP=1
+
+# libstdc++.a
+# ========================================================
+
+libstdc++.a_OBJS=$(addsuffix .o, $(basename $(libstdc++_common_src_files)))
+libstdc++.a_OBJS:=$(addprefix $(OBJ_DIR)/, $(libstdc++.a_OBJS))
+OBJS+=$(libstdc++.a_OBJS)
+libstdc++.a_LIB=libstdc++.a
+libstdc++.a_LIB:=$(addprefix $(LIB_DIR)/, $(libstdc++.a_LIB))
+STATIC_LIBS+=$(libstdc++.a_LIB)
+
+$(libstdc++.a_OBJS): CFLAGS += $(libstdc++_common_cflags)
+
+# libstdc++.so
+# ========================================================
+
+libstdc++.so_OBJS=$(libstdc++.a_OBJS)
+libstdc++.so_LIB=libstdc++.so
+libstdc++.so_LIB:=$(addprefix $(LIB_DIR)/, $(libstdc++.so_LIB))
+SHARED_LIBS+=$(libstdc++.so_LIB)
+libstdc++.so_DEPS=$(libc.so_LIB)
+libstdc++.so_LIBS=$(LIBGCC) $(LIBSUPCXX) $(LIBGCC)
+
+DYNAMIC_LIBSTDCXX=$(libstdc++.so_LIB) \
+	$(LIBGCC) $(LIBSUPCXX) \
+	$(libc.so_LIB)
+
+STATIC_LIBSTDCXX=$(libstdc++.a_LIB) \
+	$(LIBGCC) $(LIBSUPCXX) \
+	$(libc.a_LIB) $(LIBGCC)
+
 LINKER_SRC_FILES:= \
 	arch/$(ARCH)/begin.S \
 	linker.c \
@@ -823,6 +867,22 @@ hello.dynamic_EXE=hello.dynamic
 hello.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(hello.dynamic_EXE))
 EXES+=$(hello.dynamic_EXE)
 
+test_basic_exceptions_OBJS=test_basic_exceptions.o
+test_basic_exceptions_OBJS:=$(addprefix $(OBJ_DIR)/, $(test_basic_exceptions_OBJS))
+OBJS+=$(test_basic_exceptions_OBJS)
+X32OBJS+=$(test_basic_exceptions_OBJS)
+test_basic_exceptions.static_OBJS=$(test_basic_exceptions_OBJS)
+test_basic_exceptions.static_EXE=test_basic_exceptions.static
+test_basic_exceptions.static_EXE:=$(addprefix $(EXE_DIR)/, $(test_basic_exceptions.static_EXE))
+EXES+=$(test_basic_exceptions.static_EXE)
+test_basic_exceptions.dynamic_OBJS=$(test_basic_exceptions_OBJS)
+test_basic_exceptions.dynamic_EXE=test_basic_exceptions.dynamic
+test_basic_exceptions.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(test_basic_exceptions.dynamic_EXE))
+EXES+=$(test_basic_exceptions.dynamic_EXE)
+$(test_basic_exceptions_OBJS): CFLAGS += -fexceptions
+
+$(test_basic_exceptions_OBJS): CFLAGS += $(libstdc++_common_cflags)
+
 pr47383_OBJS=pr47383.o
 pr47383_OBJS:=$(addprefix $(OBJ_DIR)/, $(pr47383_OBJS))
 OBJS+=$(pr47383_OBJS)
@@ -863,14 +923,34 @@ $(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-Bstatic $(LDFLAGS) \
 	$(STATIC_LIBC) $(LIB_DIR)/crtend_android.o
 endef
 
+define build-dynamic-c++-executable
+$(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-z,nocopyreloc $(LDFLAGS) \
+	-Wl,-dynamic-linker $(LD.SO) \
+	$(LIB_DIR)/crtbegin_dynamic.o $($(@F)_OBJS) $($(@F)_DEPS) \
+	$(DYNAMIC_LIBSTDCXX) $(LIB_DIR)/crtend_android.o
+endef
+
+define build-static-c++-executable
+$(CC) $(CFLAGS) -o $@ -nostdlib -Wl,-Bstatic $(LDFLAGS) \
+	$(LIB_DIR)/crtbegin_static.o $($(@F)_OBJS) $($(@F)_DEPS) \
+	$(STATIC_LIBSTDCXX) $(LIB_DIR)/crtend_android.o
+endef
+
 define build-shlib
 $(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-soname=$(@F) \
 	$(SHLIB_LDFLAGS) $(LDFLAGS) \
 	$(LIB_DIR)/crtbegin_so.o $($(@F)_OBJS) \
-	$($(@F)_DEPS) $(LIB_DIR)/crtend_so.o
+	$($(@F)_DEPS) $($(@F)_LIBS) $(LIB_DIR)/crtend_so.o
 endef
 
-.SUFFIXES: .S .c .o so .os
+define build-shlib-ldflags
+$(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-soname=$(@F) \
+	$($(@F)_LDFLAGS) \
+	$(LIB_DIR)/crtbegin_so.o $($(@F)_OBJS) \
+	$($(@F)_DEPS) $($(@F)_LIBS) $(LIB_DIR)/crtend_so.o
+endef
+
+.SUFFIXES: .S .c .o .so .os .cpp .cc
 
 .S.o:
 	-mkdir -p $(@D)
@@ -880,11 +960,27 @@ endef
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< -c -o $@
 
+.cpp.o:
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+.cc.o:
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
 $(OBJ_DIR)/%.o: %.S
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.o: %.c
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+$(OBJ_DIR)/%.o: %.cpp
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+$(OBJ_DIR)/%.o: %.cc
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< -c -o $@
 
@@ -904,11 +1000,27 @@ $(LIB_DIR)/crtend_android.o: crtend.S
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< -c -o $@
 
+.cpp.os:
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+.cc.os:
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
 $(OBJ_DIR)/%.os: %.S
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< -c -o $@
 
 $(OBJ_DIR)/%.os: %.c
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+$(OBJ_DIR)/%.os: %.cpp
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+$(OBJ_DIR)/%.os: %.cc
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< -c -o $@
 
@@ -928,6 +1040,8 @@ $(libc.so_LIB): $(libdl.so_LIB)
 
 $(libm.so_LIB): $(libc.so_LIB)
 
+$(libstdc++.so_LIB): $(libc.so_LIB)
+
 $(LIB_DIR)/ld.so: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS)
 	$(CC) $(CFLAGS) $($(@F)_LDFLAGS) -o $@ -nostdlib -Wl,-Bstatic \
 		 $($(@F)_OBJS) $($(@F)_DEPS) $(LIB_DIR)/crtend_android.o
@@ -935,10 +1049,7 @@ $(LIB_DIR)/ld.so: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS)
 
 $(LIB_DIR)/libdl.so: $(OBJS)
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-soname=$(@F) \
-	  $($(@F)_LDFLAGS) \
-	  $(LIB_DIR)/crtbegin_so.o $($(@F)_OBJS) $(LIB_DIR)/crtend_so.o \
-	  $($(@F)_DEPS)
+	$(build-shlib-ldflags)
 
 $(EXE_DIR)/%.static: $(OBJS) $(STATIC_LIBS)
 	-mkdir -p $(@D)
@@ -947,6 +1058,14 @@ $(EXE_DIR)/%.static: $(OBJS) $(STATIC_LIBS)
 $(EXE_DIR)/%.dynamic: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB)
 	-mkdir -p $(@D)
 	$(build-dynamic-executable)
+
+$(EXE_DIR)/test_basic_exceptions.static: $(OBJS) $(STATIC_LIBS)
+	-mkdir -p $(@D)
+	$(build-static-c++-executable)
+
+$(EXE_DIR)/test_basic_exceptions.dynamic: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB)
+	-mkdir -p $(@D)
+	$(build-dynamic-c++-executable)
 
 clean:
 	rm -rf $(BUILD_DIR)

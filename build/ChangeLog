@@ -1,5 +1,20 @@
 2011-04-26  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile (BIONIC_LIBSTDCXX_DIR): New.
+	(LIBSUPCXX): Likewise.
+	(build-dynamic-c++-executable): Likewise.
+	(build-static-c++-executable): Likewise.
+	(build-shlib-ldflags): Likewise.
+	(build-shlib): Add $($(@F)_LIBS).
+	($(LIB_DIR)/libdl.so): Use $(build-shlib-ldflags).
+	Build libstdc++.a, libstdc++.so, test_basic_exceptions.static
+	and test_basic_exceptions.dynamic.
+	Support .cpp and .cc C++ files.
+
+	* test/test_basic_exceptions.cpp: New.
+
+2011-04-26  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (build-shlib): Put $(LIB_DIR)/crtend_so.o at the end.
 
 2011-04-25  H.J. Lu  <hongjiu.lu@intel.com>
