@@ -866,8 +866,8 @@ endef
 define build-shlib
 $(CC) $(CFLAGS) -o $@ -shared -nostdlib -Wl,-soname=$(@F) \
 	$(SHLIB_LDFLAGS) $(LDFLAGS) \
-	$(LIB_DIR)/crtbegin_so.o $($(@F)_OBJS) $(LIB_DIR)/crtend_so.o \
-	$($(@F)_DEPS)
+	$(LIB_DIR)/crtbegin_so.o $($(@F)_OBJS) \
+	$($(@F)_DEPS) $(LIB_DIR)/crtend_so.o
 endef
 
 .SUFFIXES: .S .c .o so .os
