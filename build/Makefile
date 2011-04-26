@@ -10,7 +10,7 @@ BIONIC_LIBSTDCXX_DIR=$(BIONIC_DIR)/libstdc++
 CORE_DIR=$(PWD)/../core
 CORE_INCLUDE_DIR=$(CORE_DIR)/include
 
-ARCH?=x32
+ARCH?=x86
 
 INCLUDES=\
 	-I$(BIONIC_LIBC_DIR)/arch-$(ARCH)/include \
