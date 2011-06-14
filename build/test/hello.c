@@ -1,10 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static void
+hello ()
+{
+  printf ("Hello world\n");
+}
+
 int
 main ()
 {
-  printf ("Hello world\n");
-  exit (0);
+  atexit (hello);
   return 0;
 }

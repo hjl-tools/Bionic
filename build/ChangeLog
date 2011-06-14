@@ -1,3 +1,8 @@
+2011-06-13  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* test/hello.c (hello): New.
+	(main): Use it.
+
 2011-04-26  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* README: Updated.
