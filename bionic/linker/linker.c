@@ -51,10 +51,8 @@
 #include "linker_environ.h"
 #include "linker_format.h"
 
-#include "ba.h"
-
 #define ALLOW_SYMBOLS_FROM_MAIN 1
-#define SO_MAX 96
+#define SO_MAX 128
 
 /* Assume average path length of 64 and max 8 paths */
 #define LDPATH_BUFSIZE 512
@@ -95,17 +93,6 @@ static soinfo *sonext = &libdl_info;
 static soinfo *somain; /* main process, always the one after libdl_info */
 #endif
 
-
-/* Set up for the buddy allocator managing the non-prelinked libraries. */
-static struct ba_bits ba_nonprelink_bitmap[(LIBLAST - LIBBASE) / LIBINC];
-static struct ba ba_nonprelink = {
-    .base = LIBBASE,
-    .size = LIBLAST - LIBBASE,
-    .min_alloc = LIBINC,
-    /* max_order will be determined automatically */
-    .bitmap = ba_nonprelink_bitmap,
-    .num_entries = sizeof(ba_nonprelink_bitmap)/sizeof(ba_nonprelink_bitmap[0]),
-};
 
 static inline int validate_soinfo(soinfo *si)
 {
@@ -292,7 +279,6 @@ static soinfo *alloc_info(const char *name)
     memset(si, 0, sizeof(soinfo));
     strlcpy((char*) si->name, name, sizeof(si->name));
     sonext->next = si;
-    si->ba_index = -1; /* by default, prelinked */
     si->next = NULL;
     si->refcount = 0;
     sonext = si;
@@ -560,7 +546,7 @@ Elf32_Sym *lookup(const char *name, soinfo **found, soinfo *start)
     return NULL;
 }
 
-soinfo *find_containing_library(void *addr)
+soinfo *find_containing_library(const void *addr)
 {
     soinfo *si;
 
@@ -574,7 +560,7 @@ soinfo *find_containing_library(void *addr)
     return NULL;
 }
 
-Elf32_Sym *find_containing_symbol(void *addr, soinfo *si)
+Elf32_Sym *find_containing_symbol(const void *addr, soinfo *si)
 {
     unsigned int i;
     unsigned soaddr = (unsigned)addr - si->base;
@@ -721,7 +707,11 @@ verify_elf_object(void *base, const char *name)
     if (hdr->e_ident[EI_MAG3] != ELFMAG3) return -1;
 
     /* TODO: Should we verify anything else in the header? */
-
+#ifdef ANDROID_ARM_LINKER
+    if (hdr->e_machine != EM_ARM) return -1;
+#elif defined(ANDROID_X86_LINKER)
+    if (hdr->e_machine != EM_386) return -1;
+#endif
     return 0;
 }
 
@@ -822,7 +812,7 @@ get_lib_extents(int fd, const char *name, void *__hdr, unsigned *total_sz)
 static int reserve_mem_region(soinfo *si)
 {
     void *base = mmap((void *)si->base, si->size, PROT_READ | PROT_EXEC,
-                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                      MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (base == MAP_FAILED) {
         DL_ERR("%5d can NOT map (%sprelinked) library '%s' at 0x%08x "
               "as requested, will try general pool: %d (%s)",
@@ -844,28 +834,25 @@ alloc_mem_region(soinfo *si)
 {
     if (si->base) {
         /* Attempt to mmap a prelinked library. */
-        si->ba_index = -1;
         return reserve_mem_region(si);
     }
 
-    /* This is not a prelinked library, so we attempt to allocate space
-       for it from the buddy allocator, which manages the area between
-       LIBBASE and LIBLAST.
+    /* This is not a prelinked library, so we use the kernel's default
+       allocator.
     */
-    si->ba_index = ba_allocate(&ba_nonprelink, si->size);
-    if(si->ba_index >= 0) {
-        si->base = ba_start_addr(&ba_nonprelink, si->ba_index);
-        PRINT("%5d mapping library '%s' at %08x (index %d) " \
-              "through buddy allocator.\n",
-              pid, si->name, si->base, si->ba_index);
-        if (reserve_mem_region(si) < 0) {
-            ba_free(&ba_nonprelink, si->ba_index);
-            si->ba_index = -1;
-            si->base = 0;
-            goto err;
-        }
-        return 0;
+
+    void *base = mmap(NULL, si->size, PROT_READ | PROT_EXEC,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (base == MAP_FAILED) {
+        DL_ERR("%5d mmap of library '%s' failed: %d (%s)\n",
+              pid, si->name,
+              errno, strerror(errno));
+        goto err;
     }
+    si->base = (unsigned) base;
+    PRINT("%5d mapped library '%s' to %08x via kernel allocator.\n",
+          pid, si->name, si->base);
+    return 0;
 
 err:
     DL_ERR("OOPS: %5d cannot map library '%s'. no vspace available.",
@@ -1154,10 +1141,6 @@ load_library(const char *name)
 
     /* Now actually load the library's segments into right places in memory */
     if (load_segments(fd, &__header[0], si) < 0) {
-        if (si->ba_index >= 0) {
-            ba_free(&ba_nonprelink, si->ba_index);
-            si->ba_index = -1;
-        }
         goto fail;
     }
 
@@ -1186,9 +1169,6 @@ init_library(soinfo *si)
      * shared library whose segments are properly mapped in. */
     TRACE("[ %5d init_library base=0x%08x sz=0x%08x name='%s') ]\n",
           pid, si->base, si->size, si->name);
-
-    if (si->base < LIBBASE || si->base >= LIBLAST)
-        si->flags |= FLAG_PRELINKED;
 
     if(link_image(si, wr_offset)) {
             /* We failed to link.  However, we can only restore libbase
@@ -1264,12 +1244,6 @@ unsigned unload_library(soinfo *si)
         }
 
         munmap((char *)si->base, si->size);
-        if (si->ba_index >= 0) {
-            PRINT("%5d releasing library '%s' address space at %08x "\
-                  "through buddy allocator.\n",
-                  pid, si->name, si->base);
-            ba_free(&ba_nonprelink, si->ba_index);
-        }
         notify_gdb_of_unload(si);
         free_info(si);
         si->refcount = 0;
@@ -2039,8 +2013,8 @@ static int link_image(soinfo *si, unsigned wr_offset)
      */
     if (program_is_setuid)
         nullify_closed_stdio ();
-    call_constructors(si);
     notify_gdb_of_load(si);
+    call_constructors(si);
     return 0;
 
 fail:
@@ -2212,8 +2186,6 @@ unsigned __linker_init(unsigned **elfdata)
         }
         vecs += 2;
     }
-
-    ba_init(&ba_nonprelink);
 
     si->base = 0;
     si->dynamic = (unsigned *)-1;

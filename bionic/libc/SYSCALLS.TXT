@@ -76,6 +76,8 @@ int     setpgid(pid_t, pid_t)  57
 pid_t   vfork(void)  190,-1,190
 int     setregid:setregid32(gid_t, gid_t)  204
 int     chroot(const char *)  61
+# IMPORTANT: Even though <sys/prctl.h> declares prctl(int,...), the syscall stub must take 6 arguments
+#            to match the kernel implementation.
 int     prctl(int option, unsigned int arg2, unsigned int arg3, unsigned int arg4, unsigned int arg5)  172
 int     capget(cap_user_header_t header, cap_user_data_t data) 184
 int     capset(cap_user_header_t header, const cap_user_data_t data) 185
@@ -174,6 +176,7 @@ int           __timer_gettime:timer_gettime(timer_t, struct itimerspec*)        
 int           __timer_getoverrun:timer_getoverrun(timer_t)                                              260,262
 int           __timer_delete:timer_delete(timer_t)                                                      261,263
 int           utimes(const char*, const struct timeval tvp[2])                          269, 271
+int           utimensat(int, const char *, const struct timespec times[2], int)         348, 320, 320
 
 # signals
 int     sigaction(int, const struct sigaction *, struct sigaction *)  67
@@ -219,7 +222,7 @@ int           sendmsg:socketcall:16(int, const struct msghdr *, unsigned int)  -
 int           recvmsg:socketcall:17(int, struct msghdr *, unsigned int)   -1,102,-1
 
 # sockets for sh.
-int           __socketcall:__socketcall(int, unsigned long*) -1,-1,102
+int           __socketcall:socketcall(int, unsigned long*) -1,-1,102
 
 # scheduler & real-time
 int sched_setscheduler(pid_t pid, int policy, const struct sched_param *param)  156

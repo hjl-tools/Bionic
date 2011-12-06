@@ -49,6 +49,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <bionic_pthread.h>
 
 extern int  __pthread_clone(int (*fn)(void*), void *child_stack, int flags, void *arg);
 extern void _exit_with_stack_teardown(void * stackBase, int stackSize, int retCode);
@@ -68,7 +69,13 @@ int  __futex_wait_ex(volatile void *ftx, int pshared, int val, const struct time
 #define  __likely(cond)    __builtin_expect(!!(cond), 1)
 #define  __unlikely(cond)  __builtin_expect(!!(cond), 0)
 
-void _thread_created_hook(pid_t thread_id) __attribute__((noinline));
+#ifdef __i386__
+#define ATTRIBUTES __attribute__((noinline)) __attribute__((fastcall))
+#else
+#define ATTRIBUTES __attribute__((noinline))
+#endif
+
+void ATTRIBUTES _thread_created_hook(pid_t thread_id);
 
 #define PTHREAD_ATTR_FLAG_DETACHED      0x00000001
 #define PTHREAD_ATTR_FLAG_USER_STACK    0x00000002
@@ -564,6 +571,7 @@ void pthread_exit(void * retval)
     void*                stack_base = thread->attr.stack_base;
     int                  stack_size = thread->attr.stack_size;
     int                  user_stack = (thread->attr.flags & PTHREAD_ATTR_FLAG_USER_STACK) != 0;
+    sigset_t mask;
 
     // call the cleanup handlers first
     while (thread->cleanup_stack) {
@@ -605,6 +613,10 @@ void pthread_exit(void * retval)
         }
         pthread_mutex_unlock(&gThreadListLock);
     }
+
+    sigfillset(&mask);
+    sigdelset(&mask, SIGSEGV);
+    (void)sigprocmask(SIG_SETMASK, &mask, (sigset_t *)NULL);
 
     // destroy the thread stack
     if (user_stack)
@@ -1849,7 +1861,21 @@ int pthread_kill(pthread_t tid, int sig)
     return ret;
 }
 
-extern int __rt_sigprocmask(int, const sigset_t *, sigset_t *, size_t);
+/* Despite the fact that our kernel headers define sigset_t explicitly
+ * as a 32-bit integer, the kernel system call really expects a 64-bit
+ * bitmap for the signal set, or more exactly an array of two-32-bit
+ * values (see $KERNEL/arch/$ARCH/include/asm/signal.h for details).
+ *
+ * Unfortunately, we cannot fix the sigset_t definition without breaking
+ * the C library ABI, so perform a little runtime translation here.
+ */
+typedef union {
+    sigset_t   bionic;
+    uint32_t   kernel[2];
+} kernel_sigset_t;
+
+/* this is a private syscall stub */
+extern int __rt_sigprocmask(int, const kernel_sigset_t *, kernel_sigset_t *, size_t);
 
 int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset)
 {
@@ -1858,15 +1884,30 @@ int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset)
      */
     int ret, old_errno = errno;
 
-    /* Use NSIG which corresponds to the number of signals in
-     * our 32-bit sigset_t implementation. As such, this function, or
-     * anything that deals with sigset_t cannot manage real-time signals
-     * (signo >= 32). We might want to introduce sigset_rt_t as an
-     * extension to do so in the future.
-     */
-    ret = __rt_sigprocmask(how, set, oset, NSIG / 8);
+    /* We must convert *set into a kernel_sigset_t */
+    kernel_sigset_t  in_set, *in_set_ptr;
+    kernel_sigset_t  out_set;
+
+    in_set.kernel[0]  = in_set.kernel[1]  =  0;
+    out_set.kernel[0] = out_set.kernel[1] = 0;
+
+    /* 'in_set_ptr' is the second parameter to __rt_sigprocmask. It must be NULL
+     * if 'set' is NULL to ensure correct semantics (which in this case would
+     * be to ignore 'how' and return the current signal set into 'oset'.
+      */
+    if (set == NULL) {
+        in_set_ptr = NULL;
+    } else {
+        in_set.bionic = *set;
+        in_set_ptr = &in_set;
+    }
+
+    ret = __rt_sigprocmask(how, in_set_ptr, &out_set, sizeof(kernel_sigset_t));
     if (ret < 0)
         ret = errno;
+
+    if (oset)
+        *oset = out_set.bionic;
 
     errno = old_errno;
     return ret;
@@ -1957,4 +1998,16 @@ int pthread_setname_np(pthread_t thid, const char *thname)
 exit:
     errno = saved_errno;
     return ret;
+}
+
+/* Return the kernel thread ID for a pthread.
+ * This is only defined for implementations where pthread <-> kernel is 1:1, which this is.
+ * Not the same as pthread_getthreadid_np, which is commonly defined to be opaque.
+ * Internal, not an NDK API.
+ */
+
+pid_t __pthread_gettid(pthread_t thid)
+{
+    pthread_internal_t* thread = (pthread_internal_t*)thid;
+    return thread->kernel_id;
 }

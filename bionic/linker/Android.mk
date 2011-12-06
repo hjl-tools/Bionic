@@ -8,8 +8,7 @@ LOCAL_SRC_FILES:= \
 	linker_format.c \
 	rt.c \
 	dlfcn.c \
-	debugger.c \
-	ba.c
+	debugger.c
 
 ifeq ($(TARGET_ARCH),sh)
 # SH-4A series virtual address range from 0x00000000 to 0x7FFFFFFF.
@@ -76,8 +75,6 @@ LOCAL_STATIC_LIBRARIES := libc_nomalloc
 LOCAL_MODULE_CLASS := EXECUTABLES
 LOCAL_MODULE_SUFFIX := $(TARGET_EXECUTABLE_SUFFIX)
 
-# Executables are not prelinked.
-LOCAL_PRELINK_MODULE := false
 
 include $(BUILD_SYSTEM)/dynamic_binary.mk
 

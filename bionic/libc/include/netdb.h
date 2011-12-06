@@ -137,10 +137,7 @@ struct addrinfo {
 /*
  * Error return codes from getaddrinfo()
  */
-#if 0
-/* obsoleted */
 #define	EAI_ADDRFAMILY	 1	/* address family for hostname not supported */
-#endif
 #define	EAI_AGAIN	 2	/* temporary failure in name resolution */
 #define	EAI_BADFLAGS	 3	/* invalid value for ai_flags */
 #define	EAI_FAIL	 4	/* non-recoverable failure in name resolution */
@@ -209,8 +206,8 @@ void endnetgrent(void);
 void endprotoent(void);
 void endservent(void);
 void freehostent(struct hostent *);
-struct hostent	*gethostbyaddr(const char *, int, int);
-int gethostbyaddr_r(const char *, int, int, struct hostent *, char *, size_t, struct hostent **, int *);
+struct hostent	*gethostbyaddr(const void *, int, int);
+int gethostbyaddr_r(const void *, int, int, struct hostent *, char *, size_t, struct hostent **, int *);
 struct hostent	*gethostbyname(const char *);
 int gethostbyname_r(const char *, struct hostent *, char *, size_t, struct hostent **, int *);
 struct hostent	*gethostbyname2(const char *, int);

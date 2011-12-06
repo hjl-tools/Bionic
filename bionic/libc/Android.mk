@@ -269,6 +269,7 @@ libc_common_src_files := \
 	bionic/libc_init_common.c \
 	bionic/logd_write.c \
 	bionic/md5.c \
+	bionic/memmove_words.c \
 	bionic/pututline.c \
 	bionic/realpath.c \
 	bionic/sched_getaffinity.c \
@@ -360,10 +361,10 @@ libc_common_src_files += \
 	arch-arm/bionic/sigsetjmp.S \
 	arch-arm/bionic/strlen.c.arm \
 	arch-arm/bionic/strcpy.S \
+	arch-arm/bionic/strcmp.S \
 	arch-arm/bionic/syscall.S \
 	string/memmove.c.arm \
 	string/bcopy.c \
-	string/strcmp.c \
 	string/strncmp.c \
 	unistd/socketcalls.c
 
@@ -479,7 +480,8 @@ libc_common_cflags := \
 		-DINET6 \
 		-I$(LOCAL_PATH)/private \
 		-DUSE_DL_PREFIX \
-		-DPOSIX_MISTAKE
+		-DPOSIX_MISTAKE \
+                -DLOG_ON_HEAP_ERROR \
 
 # these macro definitions are required to implement the
 # 'timezone' and 'daylight' global variables, as well as
@@ -507,7 +509,13 @@ ifeq ($(TARGET_ARCH),arm)
     libc_common_cflags += -DHAVE_ARM_TLS_REGISTER
   endif
 else # !arm
-  libc_crt_target_cflags :=
+  ifeq ($(TARGET_ARCH),x86)
+    libc_crt_target_cflags := -m32
+
+    # Enable recent IA friendly memory routines (such as for Atom)
+    # These will not work on the earlier x86 machines
+    libc_common_cflags += -mtune=i686 -DUSE_SSSE3 -DUSE_SSE2
+  endif # x86
 endif # !arm
 
 # Define ANDROID_SMP appropriately.
@@ -521,6 +529,10 @@ endif
 # crtbegin_xxx.S and crtend_xxx.S
 #
 libc_crt_target_cflags += -I$(LOCAL_PATH)/private
+
+ifeq ($(TARGET_ARCH),arm)
+libc_crt_target_cflags += -DCRT_LEGACY_WORKAROUND
+endif
 
 # Define some common includes
 # ========================================================
@@ -550,18 +562,24 @@ ifneq ($(filter arm x86,$(TARGET_ARCH)),)
 # that will call __cxa_finalize(&__dso_handle) in order to ensure that
 # static C++ destructors are properly called on dlclose().
 #
+
+libc_crt_target_so_cflags := $(libc_crt_target_cflags)
+ifeq ($(TARGET_ARCH),x86)
+    # This flag must be added for x86 targets, but not for ARM
+    libc_crt_target_so_cflags += -fPIC
+endif
 GEN := $(TARGET_OUT_STATIC_LIBRARIES)/crtbegin_so.o
 $(GEN): $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtbegin_so.S
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_cflags) -o $@ -c $<
+	$(TARGET_CC) $(libc_crt_target_so_cflags) -o $@ -c $<
 ALL_GENERATED_SOURCES += $(GEN)
 
 GEN := $(TARGET_OUT_STATIC_LIBRARIES)/crtend_so.o
 $(GEN): $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtend_so.S
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_cflags) -o $@ -c $<
+	$(TARGET_CC) $(libc_crt_target_so_cflags) -o $@ -c $<
 ALL_GENERATED_SOURCES += $(GEN)
-endif # TARGET_ARCH == x86
+endif # TARGET_ARCH == x86 || TARGET_ARCH == arm
 
 
 GEN := $(TARGET_OUT_STATIC_LIBRARIES)/crtbegin_static.o
@@ -597,6 +615,9 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := $(libc_common_src_files)
 LOCAL_CFLAGS := $(libc_common_cflags)
+ifeq ($(TARGET_ARCH),arm)
+LOCAL_CFLAGS += -DCRT_LEGACY_WORKAROUND
+endif
 LOCAL_C_INCLUDES := $(libc_common_c_includes)
 LOCAL_MODULE := libc_common
 LOCAL_SYSTEM_SHARED_LIBRARIES :=
@@ -714,8 +735,7 @@ LOCAL_SHARED_LIBRARIES := libc
 LOCAL_WHOLE_STATIC_LIBRARIES := libc_common
 LOCAL_SYSTEM_SHARED_LIBRARIES :=
 LOCAL_ALLOW_UNDEFINED_SYMBOLS := true
-# Don't prelink
-LOCAL_PRELINK_MODULE := false
+
 # Don't install on release build
 LOCAL_MODULE_TAGS := eng debug
 
@@ -741,8 +761,7 @@ LOCAL_MODULE:= libc_malloc_debug_qemu
 LOCAL_SHARED_LIBRARIES := libc
 LOCAL_WHOLE_STATIC_LIBRARIES := libc_common
 LOCAL_SYSTEM_SHARED_LIBRARIES :=
-# Don't prelink
-LOCAL_PRELINK_MODULE := false
+
 # Don't install on release build
 LOCAL_MODULE_TAGS := eng debug
 
