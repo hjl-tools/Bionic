@@ -41,11 +41,3 @@ _start:
         /* entry point expects sp to point to elfdata */
         popq   %rsp
         jmp    *%rax
-
-#ifndef NO_CTORS_SECTIONS
-.section .ctors, "wa"
-.globl __CTOR_LIST__
-
-__CTOR_LIST__:
-        .long -1
-#endif

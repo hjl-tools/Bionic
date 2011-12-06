@@ -16,7 +16,11 @@ kernel_dirs = [ "linux", "asm", "asm-generic", "mtd" ]
 
 # path to the directory containing the original kernel headers
 #
-kernel_original_path = os.path.normpath( find_program_dir() + '/../original' )
+kernel_original_path = os.path.normpath( find_program_dir() + '/../../../../external/kernel-headers/original' )
+
+# path to the default location of the cleaned-up headers
+#
+kernel_cleaned_path = os.path.normpath( find_program_dir() + '/..' )
 
 # a special value that is used to indicate that a given macro is known to be
 # undefined during optimization
@@ -41,6 +45,11 @@ kernel_remove_config_macros = True
 kernel_default_arch_macros = {
     "arm": {},
     "x86": {"__i386__": "1"},
+    }
+
+# Replace tokens in the output according to this mapping
+kernel_token_replacements = {
+    "asm": "__asm__",
     }
 
 # this is the set of known static inline functions that we want to keep
@@ -71,6 +80,7 @@ kernel_known_generic_statics = set(
           "__cmsg_nxthdr",                    # linux/socket.h
           "cmsg_nxthdr",                      # linux/socket.h
           "ipt_get_target",
+          "ip6t_get_target",
         ]
     )
 
@@ -106,6 +116,18 @@ kernel_disclaimer = """\
  ***   structures, and macros generated from the original header, and thus,
  ***   contains no copyrightable information.
  ***
+ ***   To edit the content of this header, modify the corresponding
+ ***   source file (e.g. under external/kernel-headers/original/) then
+ ***   run bionic/libc/kernel/tools/update_all.py
+ ***
+ ***   Any manual change here will be lost the next time this script will
+ ***   be run. You've been warned!
+ ***
  ****************************************************************************
  ****************************************************************************/
+"""
+
+# This is the warning line that will be inserted every N-th line in the output
+kernel_warning = """\
+/* WARNING: DO NOT EDIT, AUTO-GENERATED CODE - SEE TOP FOR INSTRUCTIONS */
 """

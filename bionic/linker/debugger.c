@@ -37,7 +37,7 @@
 #include "linker.h"
 
 #include <sys/socket.h>
-#include <cutils/sockets.h>
+#include <sys/un.h>
 
 void notify_gdb_of_libraries();
 
@@ -46,17 +46,93 @@ void notify_gdb_of_libraries();
         ret = (cond); \
     } while (ret < 0 && errno == EINTR)
 
-void debugger_signal_handler(int n)
+
+static int socket_abstract_client(const char *name, int type)
+{
+    struct sockaddr_un addr;
+    size_t namelen;
+    socklen_t alen;
+    int s, err;
+
+    namelen  = strlen(name);
+
+    // Test with length +1 for the *initial* '\0'.
+    if ((namelen + 1) > sizeof(addr.sun_path)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* This is used for abstract socket namespace, we need
+     * an initial '\0' at the start of the Unix socket path.
+     *
+     * Note: The path in this case is *not* supposed to be
+     * '\0'-terminated. ("man 7 unix" for the gory details.)
+     */
+    memset (&addr, 0, sizeof addr);
+    addr.sun_family = AF_LOCAL;
+    addr.sun_path[0] = 0;
+    memcpy(addr.sun_path + 1, name, namelen);
+
+    alen = namelen + offsetof(struct sockaddr_un, sun_path) + 1;
+
+    s = socket(AF_LOCAL, type, 0);
+    if(s < 0) return -1;
+
+    RETRY_ON_EINTR(err,connect(s, (struct sockaddr *) &addr, alen));
+    if (err < 0) {
+        close(s);
+        s = -1;
+    }
+
+    return s;
+}
+
+#include "linker_format.h"
+#include <../libc/private/logd.h>
+
+/*
+ * Writes a summary of the signal to the log file.
+ *
+ * We could be here as a result of native heap corruption, or while a
+ * mutex is being held, so we don't want to use any libc functions that
+ * could allocate memory or hold a lock.
+ */
+static void logSignalSummary(int signum, const siginfo_t* info)
+{
+    char buffer[128];
+
+    char* signame;
+    switch (signum) {
+        case SIGILL:    signame = "SIGILL";     break;
+        case SIGABRT:   signame = "SIGABRT";    break;
+        case SIGBUS:    signame = "SIGBUS";     break;
+        case SIGFPE:    signame = "SIGFPE";     break;
+        case SIGSEGV:   signame = "SIGSEGV";    break;
+        case SIGSTKFLT: signame = "SIGSTKFLT";  break;
+        case SIGPIPE:   signame = "SIGPIPE";    break;
+        default:        signame = "???";        break;
+    }
+
+    format_buffer(buffer, sizeof(buffer),
+        "Fatal signal %d (%s) at 0x%08x (code=%d)",
+        signum, signame, info->si_addr, info->si_code);
+
+    __libc_android_log_write(ANDROID_LOG_FATAL, "libc", buffer);
+}
+
+/*
+ * Catches fatal signals so we can ask debuggerd to ptrace us before
+ * we crash.
+ */
+void debugger_signal_handler(int n, siginfo_t* info, void* unused)
 {
     unsigned tid;
     int s;
 
-    /* avoid picking up GC interrupts */
-    signal(SIGUSR1, SIG_IGN);
+    logSignalSummary(n, info);
 
     tid = gettid();
-    s = socket_local_client("android:debuggerd",
-            ANDROID_SOCKET_NAMESPACE_ABSTRACT, SOCK_STREAM);
+    s = socket_abstract_client("android:debuggerd", SOCK_STREAM);
 
     if(s >= 0) {
         /* debugger knows our pid from the credentials on the
@@ -77,16 +153,22 @@ void debugger_signal_handler(int n)
     }
 
     /* remove our net so we fault for real when we return */
-    signal(n, SIG_IGN);
+    signal(n, SIG_DFL);
 }
 
 void debugger_init()
 {
-    signal(SIGILL, debugger_signal_handler);
-    signal(SIGABRT, debugger_signal_handler);
-    signal(SIGBUS, debugger_signal_handler);
-    signal(SIGFPE, debugger_signal_handler);
-    signal(SIGSEGV, debugger_signal_handler);
-    signal(SIGSTKFLT, debugger_signal_handler);
-    signal(SIGPIPE, debugger_signal_handler);
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = debugger_signal_handler;
+    act.sa_flags = SA_RESTART | SA_SIGINFO;
+    sigemptyset(&act.sa_mask);
+
+    sigaction(SIGILL, &act, NULL);
+    sigaction(SIGABRT, &act, NULL);
+    sigaction(SIGBUS, &act, NULL);
+    sigaction(SIGFPE, &act, NULL);
+    sigaction(SIGSEGV, &act, NULL);
+    sigaction(SIGSTKFLT, &act, NULL);
+    sigaction(SIGPIPE, &act, NULL);
 }

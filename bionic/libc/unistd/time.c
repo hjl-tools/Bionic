@@ -34,29 +34,40 @@ time_t
 time(time_t *t)
 {
 	struct timeval tt;
+	time_t ret;
 
 	if (gettimeofday(&tt, (struct timezone *)0) < 0)
-		return (-1);
-	if (t)
-		*t = (time_t)tt.tv_sec;
-	return (tt.tv_sec);
+		ret = -1;
+	else
+		ret = tt.tv_sec;
+	if (t != NULL)
+		*t = ret;
+	return ret;
 }
 
+// return monotonically increasing CPU time in ticks relative to unspecified epoch
+static inline clock_t clock_now(void)
+{
+	struct timespec tm;
+	clock_gettime( CLOCK_MONOTONIC, &tm);
+	return tm.tv_sec * CLOCKS_PER_SEC + (tm.tv_nsec * (CLOCKS_PER_SEC/1e9));
+}
 
+// initialized by the constructor below
+static clock_t clock_start;
+
+// called by dlopen when .so is loaded
+__attribute__((constructor)) static void clock_crt0(void)
+{
+	clock_start = clock_now();
+}
+
+// return elapsed CPU time in clock ticks, since start of program execution
+// (spec says epoch is undefined, but glibc uses crt0 as epoch)
 clock_t
 clock(void)
 {
-	struct timespec  tm;
-	static int       clock_inited;
-	static clock_t   clock_start;
-	clock_t          now;
-
-	clock_gettime( CLOCK_MONOTONIC, &tm);
-	now = tm.tv_sec * CLOCKS_PER_SEC + (tm.tv_nsec * (CLOCKS_PER_SEC/1e9));
-
-	if (!clock_inited) {
-		clock_start  = now;
-		clock_inited = 1;
-	}
-	return  now - clock_start;
+	// note that if we are executing in a different thread than crt0, then the
+	// pthread_create that made us had a memory barrier so clock_start is defined
+	return clock_now() - clock_start;
 }

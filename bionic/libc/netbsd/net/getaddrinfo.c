@@ -77,10 +77,13 @@
  *	  friends.
  */
 
+#include <fcntl.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/param.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -94,11 +97,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
 #include <syslog.h>
 #include <stdarg.h>
 #include "nsswitch.h"
+
+#ifdef ANDROID_CHANGES
+#include <sys/system_properties.h>
+#endif /* ANDROID_CHANGES */
+
+typedef union sockaddr_union {
+    struct sockaddr     generic;
+    struct sockaddr_in  in;
+    struct sockaddr_in6 in6;
+} sockaddr_union;
 
 #define SUCCESS 0
 #define ANY 0
@@ -334,34 +348,240 @@ str2number(const char *p)
 		return -1;
 }
 
-/* Determine whether IPv6 connectivity is available. */
+/*
+ * Connect a UDP socket to a given unicast address. This will cause no network
+ * traffic, but will fail fast if the system has no or limited reachability to
+ * the destination (e.g., no IPv4 address, no IPv6 default route, ...).
+ */
 static int
-_have_ipv6() {
-	/*
-	 * Connect a UDP socket to an global unicast IPv6 address. This will
-	 * cause no network traffic, but will fail fast if the system has no or
-	 * limited IPv6 connectivity (e.g., only a link-local address).
-	 */
-	static const struct sockaddr_in6 sin6_test = {
-		/* family, port, flow label */
-		AF_INET6, 0, 0,
-		/* 2000:: */
-		{{{ 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }}},
-		/* scope ID */
-		0};
-	static const struct sockaddr *sa_test = (struct sockaddr *) &sin6_test;
-	int s = socket(PF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+_test_connect(int pf, struct sockaddr *addr, size_t addrlen) {
+	int s = socket(pf, SOCK_DGRAM, IPPROTO_UDP);
 	if (s < 0)
 		return 0;
 	int ret;
 	do {
-		ret = connect(s, sa_test, sizeof(sin6_test));
+		ret = connect(s, addr, addrlen);
 	} while (ret < 0 && errno == EINTR);
-	int have_ipv6 = (ret == 0);
+	int success = (ret == 0);
 	do {
 		ret = close(s);
 	} while (ret < 0 && errno == EINTR);
-	return have_ipv6;
+	return success;
+}
+
+/*
+ * The following functions determine whether IPv4 or IPv6 connectivity is
+ * available in order to implement AI_ADDRCONFIG.
+ *
+ * Strictly speaking, AI_ADDRCONFIG should not look at whether connectivity is
+ * available, but whether addresses of the specified family are "configured
+ * on the local system". However, bionic doesn't currently support getifaddrs,
+ * so checking for connectivity is the next best thing.
+ */
+static int
+_have_ipv6() {
+	static const struct sockaddr_in6 sin6_test = {
+		.sin6_family = AF_INET6,
+		.sin6_addr.s6_addr = {  // 2000::
+			0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+		};
+        sockaddr_union addr = { .in6 = sin6_test };
+	return _test_connect(PF_INET6, &addr.generic, sizeof(addr.in6));
+}
+
+static int
+_have_ipv4() {
+	static const struct sockaddr_in sin_test = {
+		.sin_family = AF_INET,
+		.sin_addr.s_addr = __constant_htonl(0x08080808L)  // 8.8.8.8
+	};
+        sockaddr_union addr = { .in = sin_test };
+        return _test_connect(PF_INET, &addr.generic, sizeof(addr.in));
+}
+
+// Returns 0 on success, else returns non-zero on error (in which case
+// getaddrinfo should continue as normal)
+static int
+android_getaddrinfo_proxy(
+    const char *hostname, const char *servname,
+    const struct addrinfo *hints, struct addrinfo **res)
+{
+	int sock;
+	const int one = 1;
+	struct sockaddr_un proxy_addr;
+	const char* cache_mode = getenv("ANDROID_DNS_MODE");
+	FILE* proxy = NULL;
+	int success = 0;
+
+	// Clear this at start, as we use its non-NULLness later (in the
+	// error path) to decide if we have to free up any memory we
+	// allocated in the process (before failing).
+	*res = NULL;
+
+	if (cache_mode != NULL && strcmp(cache_mode, "local") == 0) {
+		// Don't use the proxy in local mode.  This is used by the
+		// proxy itself.
+		return -1;
+	}
+
+	// Temporary cautious hack to disable the DNS proxy for processes
+	// requesting special treatment.  Ideally the DNS proxy should
+	// accomodate these apps, though.
+	char propname[PROP_NAME_MAX];
+	char propvalue[PROP_VALUE_MAX];
+	snprintf(propname, sizeof(propname), "net.dns1.%d", getpid());
+	if (__system_property_get(propname, propvalue) > 0) {
+		return -1;
+	}
+
+	// Bogus things we can't serialize.  Don't use the proxy.
+	if ((hostname != NULL &&
+	     strcspn(hostname, " \n\r\t^'\"") != strlen(hostname)) ||
+	    (servname != NULL &&
+	     strcspn(servname, " \n\r\t^'\"") != strlen(servname))) {
+		return -1;
+	}
+
+	sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (sock < 0) {
+		return -1;
+	}
+
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+	memset(&proxy_addr, 0, sizeof(proxy_addr));
+	proxy_addr.sun_family = AF_UNIX;
+	strlcpy(proxy_addr.sun_path, "/dev/socket/dnsproxyd",
+		sizeof(proxy_addr.sun_path));
+	if (TEMP_FAILURE_RETRY(connect(sock,
+				       (const struct sockaddr*) &proxy_addr,
+				       sizeof(proxy_addr))) != 0) {
+		close(sock);
+		return -1;
+	}
+
+	// Send the request.
+	proxy = fdopen(sock, "r+");
+	if (fprintf(proxy, "getaddrinfo %s %s %d %d %d %d",
+		    hostname == NULL ? "^" : hostname,
+		    servname == NULL ? "^" : servname,
+		    hints == NULL ? -1 : hints->ai_flags,
+		    hints == NULL ? -1 : hints->ai_family,
+		    hints == NULL ? -1 : hints->ai_socktype,
+		    hints == NULL ? -1 : hints->ai_protocol) < 0) {
+		goto exit;
+	}
+	// literal NULL byte at end, required by FrameworkListener
+	if (fputc(0, proxy) == EOF ||
+	    fflush(proxy) != 0) {
+		goto exit;
+	}
+
+	int remote_rv;
+	if (fread(&remote_rv, sizeof(int), 1, proxy) != 1) {
+		goto exit;
+	}
+
+	if (remote_rv != 0) {
+		goto exit;
+	}
+
+	struct addrinfo* ai = NULL;
+	struct addrinfo** nextres = res;
+	while (1) {
+		uint32_t addrinfo_len;
+		if (fread(&addrinfo_len, sizeof(addrinfo_len),
+			  1, proxy) != 1) {
+			break;
+		}
+		addrinfo_len = ntohl(addrinfo_len);
+		if (addrinfo_len == 0) {
+			success = 1;
+			break;
+		}
+
+		if (addrinfo_len < sizeof(struct addrinfo)) {
+			break;
+		}
+		struct addrinfo* ai = calloc(1, addrinfo_len +
+					     sizeof(struct sockaddr_storage));
+		if (ai == NULL) {
+			break;
+		}
+
+		if (fread(ai, addrinfo_len, 1, proxy) != 1) {
+			// Error; fall through.
+			break;
+		}
+
+		// Zero out the pointer fields we copied which aren't
+		// valid in this address space.
+		ai->ai_addr = NULL;
+		ai->ai_canonname = NULL;
+		ai->ai_next = NULL;
+
+		// struct sockaddr
+		uint32_t addr_len;
+		if (fread(&addr_len, sizeof(addr_len), 1, proxy) != 1) {
+			break;
+		}
+		addr_len = ntohl(addr_len);
+		if (addr_len != 0) {
+			if (addr_len > sizeof(struct sockaddr_storage)) {
+				// Bogus; too big.
+				break;
+			}
+			struct sockaddr* addr = (struct sockaddr*)(ai + 1);
+			if (fread(addr, addr_len, 1, proxy) != 1) {
+				break;
+			}
+			ai->ai_addr = addr;
+		}
+
+		// cannonname
+		uint32_t name_len;
+		if (fread(&name_len, sizeof(name_len), 1, proxy) != 1) {
+			break;
+		}
+		name_len = ntohl(name_len);
+		if (name_len != 0) {
+			ai->ai_canonname = (char*) malloc(name_len);
+			if (fread(ai->ai_canonname, name_len, 1, proxy) != 1) {
+				break;
+			}
+			if (ai->ai_canonname[name_len - 1] != '\0') {
+				// The proxy should be returning this
+				// NULL-terminated.
+				break;
+			}
+		}
+
+		*nextres = ai;
+		nextres = &ai->ai_next;
+		ai = NULL;
+	}
+
+	if (ai != NULL) {
+		// Clean up partially-built addrinfo that we never ended up
+		// attaching to the response.
+		freeaddrinfo(ai);
+	}
+exit:
+	if (proxy != NULL) {
+		fclose(proxy);
+	}
+
+	if (success) {
+		return 0;
+	}
+
+	// Proxy failed; fall through to local
+	// resolver case.  But first clean up any
+	// memory we might've allocated.
+	if (*res) {
+		freeaddrinfo(*res);
+		*res = NULL;
+	}
+	return -1;
 }
 
 int
@@ -509,6 +729,13 @@ getaddrinfo(const char *hostname, const char *servname,
 		ERR(EAI_NODATA);
 	if (pai->ai_flags & AI_NUMERICHOST)
 		ERR(EAI_NONAME);
+
+        /*
+         * BEGIN ANDROID CHANGES; proxying to the cache
+         */
+        if (android_getaddrinfo_proxy(hostname, servname, hints, res) == 0) {
+            return 0;
+        }
 
 	/*
 	 * hostname as alphabetical name.
@@ -1261,7 +1488,7 @@ getanswer(const querybuf *answer, int anslen, const char *qname, int qtype,
 struct addrinfo_sort_elem {
 	struct addrinfo *ai;
 	int has_src_addr;
-	struct sockaddr_in6 src_addr;  /* Large enough to hold IPv4 or IPv6. */
+	sockaddr_union src_addr;
 	int original_order;
 };
 
@@ -1292,11 +1519,13 @@ _get_scope(const struct sockaddr *addr)
 		if (IN_LOOPBACK(na) ||                          /* 127.0.0.0/8 */
 		    (na & 0xffff0000) == 0xa9fe0000) {          /* 169.254.0.0/16 */
 			return IPV6_ADDR_SCOPE_LINKLOCAL;
-		} else if ((na & 0xff000000) == 0x0a000000 ||   /* 10.0.0.0/8 */
-			   (na & 0xfff00000) == 0xac100000 ||   /* 172.16.0.0/12 */
-			   (na & 0xffff0000) == 0xc0a80000) {   /* 192.168.0.0/16 */
-			return IPV6_ADDR_SCOPE_SITELOCAL;
 		} else {
+			/*
+			 * According to draft-ietf-6man-rfc3484-revise-01 section 2.3,
+			 * it is best not to treat the private IPv4 ranges
+			 * (10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16) as being
+			 * in a special scope, so we don't.
+			 */
 			return IPV6_ADDR_SCOPE_GLOBAL;
 		}
 	} else {
@@ -1318,9 +1547,13 @@ _get_scope(const struct sockaddr *addr)
 #define IN6_IS_ADDR_6TO4(a)	 \
 	(((a)->s6_addr[0] == 0x20) && ((a)->s6_addr[1] == 0x02))
 
+/* 6bone testing address area (3ffe::/16), deprecated in RFC 3701. */
+#define IN6_IS_ADDR_6BONE(a)      \
+	(((a)->s6_addr[0] == 0x3f) && ((a)->s6_addr[1] == 0xfe))
+
 /*
  * Get the label for a given IPv4/IPv6 address.
- * RFC 3484, section 2.1, plus Teredo added in with label 5.
+ * RFC 3484, section 2.1, plus changes from draft-ietf-6man-rfc3484-revise-01.
  */
 
 /*ARGSUSED*/
@@ -1328,19 +1561,27 @@ static int
 _get_label(const struct sockaddr *addr)
 {
 	if (addr->sa_family == AF_INET) {
-		return 4;
+		return 3;
 	} else if (addr->sa_family == AF_INET6) {
 		const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6 *)addr;
 		if (IN6_IS_ADDR_LOOPBACK(&addr6->sin6_addr)) {
 			return 0;
-		} else if (IN6_IS_ADDR_V4COMPAT(&addr6->sin6_addr)) {
+		} else if (IN6_IS_ADDR_ULA(&addr6->sin6_addr)) {
+			return 1;
+		} else if (IN6_IS_ADDR_V4MAPPED(&addr6->sin6_addr)) {
 			return 3;
+		} else if (IN6_IS_ADDR_6TO4(&addr6->sin6_addr)) {
+			return 4;
 		} else if (IN6_IS_ADDR_TEREDO(&addr6->sin6_addr)) {
 			return 5;
-		} else if (IN6_IS_ADDR_6TO4(&addr6->sin6_addr)) {
-			return 2;
+		} else if (IN6_IS_ADDR_V4COMPAT(&addr6->sin6_addr)) {
+			return 10;
+		} else if (IN6_IS_ADDR_SITELOCAL(&addr6->sin6_addr)) {
+			return 11;
+		} else if (IN6_IS_ADDR_6BONE(&addr6->sin6_addr)) {
+			return 12;
 		} else {
-			return 1;
+			return 2;
 		}
 	} else {
 		/*
@@ -1353,7 +1594,7 @@ _get_label(const struct sockaddr *addr)
 
 /*
  * Get the precedence for a given IPv4/IPv6 address.
- * RFC 3484, section 2.1, plus Teredo added in with precedence 25.
+ * RFC 3484, section 2.1, plus changes from draft-ietf-6man-rfc3484-revise-01.
  */
 
 /*ARGSUSED*/
@@ -1361,22 +1602,28 @@ static int
 _get_precedence(const struct sockaddr *addr)
 {
 	if (addr->sa_family == AF_INET) {
-		return 10;
+		return 30;
 	} else if (addr->sa_family == AF_INET6) {
 		const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6 *)addr;
 		if (IN6_IS_ADDR_LOOPBACK(&addr6->sin6_addr)) {
+			return 60;
+		} else if (IN6_IS_ADDR_ULA(&addr6->sin6_addr)) {
 			return 50;
-		} else if (IN6_IS_ADDR_V4COMPAT(&addr6->sin6_addr)) {
+		} else if (IN6_IS_ADDR_V4MAPPED(&addr6->sin6_addr)) {
+			return 30;
+		} else if (IN6_IS_ADDR_6TO4(&addr6->sin6_addr)) {
 			return 20;
 		} else if (IN6_IS_ADDR_TEREDO(&addr6->sin6_addr)) {
-			return 25;
-		} else if (IN6_IS_ADDR_6TO4(&addr6->sin6_addr)) {
-			return 30;
+			return 10;
+		} else if (IN6_IS_ADDR_V4COMPAT(&addr6->sin6_addr) ||
+		           IN6_IS_ADDR_SITELOCAL(&addr6->sin6_addr) ||
+		           IN6_IS_ADDR_6BONE(&addr6->sin6_addr)) {
+			return 1;
 		} else {
 			return 40;
 		}
 	} else {
-		return 5;
+		return 1;
 	}
 }
 
@@ -1433,11 +1680,11 @@ _rfc3484_compare(const void *ptr1, const void* ptr2)
 	}
 
 	/* Rule 2: Prefer matching scope. */
-	scope_src1 = _get_scope((const struct sockaddr *)&a1->src_addr);
+	scope_src1 = _get_scope(&a1->src_addr.generic);
 	scope_dst1 = _get_scope(a1->ai->ai_addr);
 	scope_match1 = (scope_src1 == scope_dst1);
 
-	scope_src2 = _get_scope((const struct sockaddr *)&a2->src_addr);
+	scope_src2 = _get_scope(&a2->src_addr.generic);
 	scope_dst2 = _get_scope(a2->ai->ai_addr);
 	scope_match2 = (scope_src2 == scope_dst2);
 
@@ -1456,11 +1703,11 @@ _rfc3484_compare(const void *ptr1, const void* ptr2)
 	 */
 
 	/* Rule 5: Prefer matching label. */
-	label_src1 = _get_label((const struct sockaddr *)&a1->src_addr);
+	label_src1 = _get_label(&a1->src_addr.generic);
 	label_dst1 = _get_label(a1->ai->ai_addr);
 	label_match1 = (label_src1 == label_dst1);
 
-	label_src2 = _get_label((const struct sockaddr *)&a2->src_addr);
+	label_src2 = _get_label(&a2->src_addr.generic);
 	label_dst2 = _get_label(a2->ai->ai_addr);
 	label_match2 = (label_src2 == label_dst2);
 
@@ -1493,9 +1740,9 @@ _rfc3484_compare(const void *ptr1, const void* ptr2)
 	 */
 	if (a1->has_src_addr && a1->ai->ai_addr->sa_family == AF_INET6 &&
 	    a2->has_src_addr && a2->ai->ai_addr->sa_family == AF_INET6) {
-		const struct sockaddr_in6 *a1_src = (const struct sockaddr_in6 *)&a1->src_addr;
+		const struct sockaddr_in6 *a1_src = &a1->src_addr.in6;
 		const struct sockaddr_in6 *a1_dst = (const struct sockaddr_in6 *)a1->ai->ai_addr;
-		const struct sockaddr_in6 *a2_src = (const struct sockaddr_in6 *)&a2->src_addr;
+		const struct sockaddr_in6 *a2_src = &a2->src_addr.in6;
 		const struct sockaddr_in6 *a2_dst = (const struct sockaddr_in6 *)a2->ai->ai_addr;
 		prefixlen1 = _common_prefix_len(&a1_src->sin6_addr, &a1_dst->sin6_addr);
 		prefixlen2 = _common_prefix_len(&a2_src->sin6_addr, &a2_dst->sin6_addr);
@@ -1600,7 +1847,7 @@ _rfc3484_sort(struct addrinfo *list_sentinel)
 		elems[i].ai = cur;
 		elems[i].original_order = i;
 
-		has_src_addr = _find_src_addr(cur->ai_addr, (struct sockaddr *)&elems[i].src_addr);
+		has_src_addr = _find_src_addr(cur->ai_addr, &elems[i].src_addr.generic);
 		if (has_src_addr == -1) {
 			goto error;
 		}
@@ -1660,17 +1907,34 @@ _dns_getaddrinfo(void *rv, void	*cb_data, va_list ap)
 		q.qclass = C_IN;
 		q.answer = buf->buf;
 		q.anslen = sizeof(buf->buf);
-		/* If AI_ADDRCONFIG, lookup IPv6 only if we have connectivity */
-		if (!(pai->ai_flags & AI_ADDRCONFIG) || _have_ipv6()) {
+		int query_ipv6 = 1, query_ipv4 = 1;
+		if (pai->ai_flags & AI_ADDRCONFIG) {
+			query_ipv6 = _have_ipv6();
+			query_ipv4 = _have_ipv4();
+			if (query_ipv6 == 0 && query_ipv4 == 0) {
+				// Both our IPv4 and IPv6 connectivity probes failed, which indicates
+				// that we have neither an IPv4 or an IPv6 default route (and thus no
+				// global IPv4 or IPv6 connectivity). We might be in a walled garden.
+				// Throw up our arms and ask for both A and AAAA.
+				query_ipv6 = query_ipv4 = 1;
+			}
+		}
+		if (query_ipv6) {
 			q.qtype = T_AAAA;
-			q.next = &q2;
-			q2.name = name;
-			q2.qclass = C_IN;
-			q2.qtype = T_A;
-			q2.answer = buf2->buf;
-			q2.anslen = sizeof(buf2->buf);
-		} else {
+			if (query_ipv4) {
+				q.next = &q2;
+				q2.name = name;
+				q2.qclass = C_IN;
+				q2.qtype = T_A;
+				q2.answer = buf2->buf;
+				q2.anslen = sizeof(buf2->buf);
+			}
+		} else if (query_ipv4) {
 			q.qtype = T_A;
+		} else {
+			free(buf);
+			free(buf2);
+			return NS_NOTFOUND;
 		}
 		break;
 	case AF_INET:

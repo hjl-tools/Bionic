@@ -46,7 +46,7 @@ int
 sprintf(char *str, const char *fmt, ...)
 {
 	int ret;
-  va_list ap;
+	va_list ap;
 	FILE f;
 	struct __sfileext fext;
 
@@ -56,8 +56,8 @@ sprintf(char *str, const char *fmt, ...)
 	f._bf._base = f._p = (unsigned char *)str;
 	f._bf._size = f._w = INT_MAX;
 	va_start(ap, fmt);
-	ret = vfprintf(&f, fmt, ap);
-  va_end(ap);
+	ret = __vfprintf(&f, fmt, ap);
+	va_end(ap);
 	*f._p = '\0';
 	return (ret);
 }

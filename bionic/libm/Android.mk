@@ -3,6 +3,7 @@ LOCAL_PATH:= $(call my-dir)
 libm_common_src_files:= \
 	isinf.c  \
 	fpclassify.c \
+	sincos.c \
 	bsdsrc/b_exp.c \
 	bsdsrc/b_log.c \
 	bsdsrc/b_tgamma.c \
@@ -116,6 +117,7 @@ libm_common_src_files:= \
 	src/s_lroundf.c \
 	src/s_lroundl.c \
 	src/s_modff.c \
+	src/s_nan.c \
 	src/s_nearbyint.c \
 	src/s_nextafter.c \
 	src/s_nextafterf.c \
@@ -137,6 +139,7 @@ libm_common_src_files:= \
 	src/s_tanf.c \
 	src/s_tanh.c \
 	src/s_tanhf.c \
+	src/s_tgammaf.c \
 	src/s_trunc.c \
 	src/s_truncf.c \
 	src/s_truncl.c \

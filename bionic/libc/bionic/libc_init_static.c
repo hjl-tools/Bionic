@@ -75,7 +75,7 @@ __noreturn void __libc_init(uintptr_t *elfdata,
     /* pre-init array. */
     call_array(structors->preinit_array);
 
-#ifndef NO_CTORS_SECTIONS
+#if !defined __i386__ && !defined __x86_64__
     /* .ctors section initializers, for non-arm-eabi ABIs */
     call_array(structors->ctors_array);
 #endif
@@ -86,6 +86,13 @@ __noreturn void __libc_init(uintptr_t *elfdata,
     argc = (int) *elfdata;
     argv = (char**)(elfdata + 1);
     envp = argv + argc + 1;
+
+    /* The executable may have its own destructors listed in its .fini_array
+     * so we need to ensure that these are called when the program exits
+     * normally.
+     */
+    if (structors->fini_array)
+        __cxa_atexit(__libc_fini,structors->fini_array,NULL);
 
     exit(slingshot(argc, argv, envp));
 }

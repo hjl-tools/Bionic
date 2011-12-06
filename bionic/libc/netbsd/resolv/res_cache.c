@@ -27,17 +27,28 @@
  */
 
 #include "resolv_cache.h"
+#include <resolv.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "pthread.h"
 
+#include <errno.h>
+#include "arpa_nameser.h"
+#include <sys/system_properties.h>
+#include <net/if.h>
+#include <netdb.h>
+#include <linux/if.h>
+
+#include <arpa/inet.h>
+#include "resolv_private.h"
+
 /* This code implements a small and *simple* DNS resolver cache.
  *
- * It is only used to cache DNS answers for a maximum of CONFIG_SECONDS seconds
- * in order to reduce DNS traffic. It is not supposed to be a full DNS cache,
- * since we plan to implement that in the future in a dedicated process running
- * on the system.
+ * It is only used to cache DNS answers for a time defined by the smallest TTL
+ * among the answer records in order to reduce DNS traffic. It is not supposed
+ * to be a full DNS cache, since we plan to implement that in the future in a
+ * dedicated process running on the system.
  *
  * Note that its design is kept simple very intentionally, i.e.:
  *
@@ -47,9 +58,8 @@
  *    (this means that two similar queries that encode the DNS name
  *     differently will be treated distinctly).
  *
- *  - the TTLs of answer RRs are ignored. our DNS resolver library does not use
- *    them anyway, but it means that records with a TTL smaller than
- *    CONFIG_SECONDS will be kept in the cache anyway.
+ *    the smallest TTL value among the answer records are used as the time
+ *    to keep an answer in the cache.
  *
  *    this is bad, but we absolutely want to avoid parsing the answer packets
  *    (and should be solved by the later full DNS cache process).
@@ -104,7 +114,7 @@
  */
 #define  CONFIG_SECONDS    (60*10)    /* 10 minutes */
 
-/* maximum number of entries kept in the cache. This value has been
+/* default number of entries kept in the cache. This value has been
  * determined by browsing through various sites and counting the number
  * of corresponding requests. Keep in mind that our framework is currently
  * performing two requests per name lookup (one for IPv4, the other for IPv6)
@@ -123,9 +133,15 @@
  * most high-level websites use lots of media/ad servers with different names
  * but these are generally reused when browsing through the site.
  *
- * As such, a valud of 64 should be relatively conformtable at the moment.
+ * As such, a value of 64 should be relatively comfortable at the moment.
+ *
+ * The system property ro.net.dns_cache_size can be used to override the default
+ * value with a custom value
  */
 #define  CONFIG_MAX_ENTRIES    64
+
+/* name of the system property that can be used to set the cache size */
+#define  DNS_CACHE_SIZE_PROP_NAME   "ro.net.dns_cache_size"
 
 /****************************************************************************/
 /****************************************************************************/
@@ -141,6 +157,7 @@
 /* set to 1 to debug query data */
 #define  DEBUG_DATA  0
 
+#undef XLOG
 #if DEBUG
 #  include <logd.h>
 #  define  XLOG(...)   \
@@ -987,10 +1004,50 @@ typedef struct Entry {
     int              querylen;
     const uint8_t*   answer;
     int              answerlen;
-    time_t           when;   /* time_t when entry was added to table */
-    int              id;     /* for debugging purpose */
+    time_t           expires;   /* time_t when the entry isn't valid any more */
+    int              id;        /* for debugging purpose */
 } Entry;
 
+/**
+ * Parse the answer records and find the smallest
+ * TTL among the answer records.
+ *
+ * The returned TTL is the number of seconds to
+ * keep the answer in the cache.
+ *
+ * In case of parse error zero (0) is returned which
+ * indicates that the answer shall not be cached.
+ */
+static u_long
+answer_getTTL(const void* answer, int answerlen)
+{
+    ns_msg handle;
+    int ancount, n;
+    u_long result, ttl;
+    ns_rr rr;
+
+    result = 0;
+    if (ns_initparse(answer, answerlen, &handle) >= 0) {
+        // get number of answer records
+        ancount = ns_msg_count(handle, ns_s_an);
+        for (n = 0; n < ancount; n++) {
+            if (ns_parserr(&handle, ns_s_an, n, &rr) == 0) {
+                ttl = ns_rr_ttl(rr);
+                if (n == 0 || ttl < result) {
+                    result = ttl;
+                }
+            } else {
+                XLOG("ns_parserr failed ancount no = %d. errno = %s\n", n, strerror(errno));
+            }
+        }
+    } else {
+        XLOG("ns_parserr failed. %s\n", strerror(errno));
+    }
+
+    XLOG("TTL = %d\n", result);
+
+    return result;
+}
 
 static void
 entry_free( Entry*  e )
@@ -1072,8 +1129,6 @@ entry_alloc( const Entry*  init, const void*  answer, int  answerlen )
 
     memcpy( (char*)e->answer, answer, e->answerlen );
 
-    e->when  = _time_now();
-
     return e;
 }
 
@@ -1103,17 +1158,25 @@ entry_equals( const Entry*  e1, const Entry*  e2 )
  * for simplicity, the hash-table fields 'hash' and 'hlink' are
  * inlined in the Entry structure.
  */
-#define  MAX_HASH_ENTRIES   (2*CONFIG_MAX_ENTRIES)
 
 typedef struct resolv_cache {
+    int              max_entries;
     int              num_entries;
     Entry            mru_list;
     pthread_mutex_t  lock;
     unsigned         generation;
     int              last_id;
-    Entry*           entries[ MAX_HASH_ENTRIES ];
+    Entry*           entries;
 } Cache;
 
+typedef struct resolv_cache_info {
+    char                        ifname[IF_NAMESIZE + 1];
+    struct in_addr              ifaddr;
+    Cache*                      cache;
+    struct resolv_cache_info*   next;
+    char*                       nameservers[MAXNS +1];
+    struct addrinfo*            nsaddrinfo[MAXNS + 1];
+} CacheInfo;
 
 #define  HTABLE_VALID(x)  ((x) != NULL && (x) != HTABLE_DELETED)
 
@@ -1123,9 +1186,9 @@ _cache_flush_locked( Cache*  cache )
     int     nn;
     time_t  now = _time_now();
 
-    for (nn = 0; nn < MAX_HASH_ENTRIES; nn++) 
+    for (nn = 0; nn < cache->max_entries; nn++)
     {
-        Entry**  pnode = &cache->entries[nn];
+        Entry**  pnode = (Entry**) &cache->entries[nn];
 
         while (*pnode != NULL) {
             Entry*  node = *pnode;
@@ -1143,17 +1206,48 @@ _cache_flush_locked( Cache*  cache )
          "*************************");
 }
 
-struct resolv_cache*
+/* Return max number of entries allowed in the cache,
+ * i.e. cache size. The cache size is either defined
+ * by system property ro.net.dns_cache_size or by
+ * CONFIG_MAX_ENTRIES if system property not set
+ * or set to invalid value. */
+static int
+_res_cache_get_max_entries( void )
+{
+    int result = -1;
+    char cache_size[PROP_VALUE_MAX];
+
+    if (__system_property_get(DNS_CACHE_SIZE_PROP_NAME, cache_size) > 0) {
+        result = atoi(cache_size);
+    }
+
+    // ro.net.dns_cache_size not set or set to negative value
+    if (result <= 0) {
+        result = CONFIG_MAX_ENTRIES;
+    }
+
+    XLOG("cache size: %d", result);
+    return result;
+}
+
+static struct resolv_cache*
 _resolv_cache_create( void )
 {
     struct resolv_cache*  cache;
 
     cache = calloc(sizeof(*cache), 1);
     if (cache) {
-        cache->generation = ~0U;
-        pthread_mutex_init( &cache->lock, NULL );
-        cache->mru_list.mru_prev = cache->mru_list.mru_next = &cache->mru_list;
-        XLOG("%s: cache created\n", __FUNCTION__);
+        cache->max_entries = _res_cache_get_max_entries();
+        cache->entries = calloc(sizeof(*cache->entries), cache->max_entries);
+        if (cache->entries) {
+            cache->generation = ~0U;
+            pthread_mutex_init( &cache->lock, NULL );
+            cache->mru_list.mru_prev = cache->mru_list.mru_next = &cache->mru_list;
+            XLOG("%s: cache created\n", __FUNCTION__);
+        } else {
+            free(cache);
+            cache = NULL;
+        }
     }
     return cache;
 }
@@ -1183,12 +1277,47 @@ _cache_dump_mru( Cache*  cache )
 
     XLOG("%s", temp);
 }
+
+static void
+_dump_answer(const void* answer, int answerlen)
+{
+    res_state statep;
+    FILE* fp;
+    char* buf;
+    int fileLen;
+
+    fp = fopen("/data/reslog.txt", "w+");
+    if (fp != NULL) {
+        statep = __res_get_state();
+
+        res_pquery(statep, answer, answerlen, fp);
+
+        //Get file length
+        fseek(fp, 0, SEEK_END);
+        fileLen=ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        buf = (char *)malloc(fileLen+1);
+        if (buf != NULL) {
+            //Read file contents into buffer
+            fread(buf, fileLen, 1, fp);
+            XLOG("%s\n", buf);
+            free(buf);
+        }
+        fclose(fp);
+        remove("/data/reslog.txt");
+    }
+    else {
+        XLOG("_dump_answer: can't open file\n");
+    }
+}
 #endif
 
 #if DEBUG
 #  define  XLOG_QUERY(q,len)   _dump_query((q), (len))
+#  define  XLOG_ANSWER(a, len) _dump_answer((a), (len))
 #else
 #  define  XLOG_QUERY(q,len)   ((void)0)
+#  define  XLOG_ANSWER(a,len)  ((void)0)
 #endif
 
 /* This function tries to find a key within the hash table
@@ -1209,8 +1338,8 @@ static Entry**
 _cache_lookup_p( Cache*   cache,
                  Entry*   key )
 {
-    int      index = key->hash % MAX_HASH_ENTRIES;
-    Entry**  pnode = &cache->entries[ key->hash % MAX_HASH_ENTRIES ];
+    int      index = key->hash % cache->max_entries;
+    Entry**  pnode = (Entry**) &cache->entries[ index ];
 
     while (*pnode != NULL) {
         Entry*  node = *pnode;
@@ -1276,6 +1405,10 @@ _cache_remove_oldest( Cache*  cache )
         XLOG("%s: OLDEST NOT IN HTABLE ?", __FUNCTION__);
         return;
     }
+    if (DEBUG) {
+        XLOG("Cache full - removing oldest");
+        XLOG_QUERY(oldest->query, oldest->querylen);
+    }
     _cache_remove_p(cache, lookup);
 }
 
@@ -1322,8 +1455,9 @@ _resolv_cache_lookup( struct resolv_cache*  cache,
     now = _time_now();
 
     /* remove stale entries here */
-    if ( (unsigned)(now - e->when) >= CONFIG_SECONDS ) {
+    if (now >= e->expires) {
         XLOG( " NOT IN CACHE (STALE ENTRY %p DISCARDED)", *lookup );
+        XLOG_QUERY(e->query, e->querylen);
         _cache_remove_p(cache, lookup);
         goto Exit;
     }
@@ -1363,6 +1497,7 @@ _resolv_cache_add( struct resolv_cache*  cache,
     Entry    key[1];
     Entry*   e;
     Entry**  lookup;
+    u_long   ttl;
 
     /* don't assume that the query has already been cached
      */
@@ -1375,6 +1510,7 @@ _resolv_cache_add( struct resolv_cache*  cache,
 
     XLOG( "%s: query:", __FUNCTION__ );
     XLOG_QUERY(query,querylen);
+    XLOG_ANSWER(answer, answerlen);
 #if DEBUG_DATA
     XLOG( "answer:");
     XLOG_BYTES(answer,answerlen);
@@ -1389,7 +1525,7 @@ _resolv_cache_add( struct resolv_cache*  cache,
         goto Exit;
     }
 
-    if (cache->num_entries >= CONFIG_MAX_ENTRIES) {
+    if (cache->num_entries >= cache->max_entries) {
         _cache_remove_oldest(cache);
         /* need to lookup again */
         lookup = _cache_lookup_p(cache, key);
@@ -1401,9 +1537,13 @@ _resolv_cache_add( struct resolv_cache*  cache,
         }
     }
 
-    e = entry_alloc( key, answer, answerlen );
-    if (e != NULL) {
-        _cache_add_p(cache, lookup, e);
+    ttl = answer_getTTL(answer, answerlen);
+    if (ttl > 0) {
+        e = entry_alloc(key, answer, answerlen);
+        if (e != NULL) {
+            e->expires = ttl + _time_now();
+            _cache_add_p(cache, lookup, e);
+        }
     }
 #if DEBUG
     _cache_dump_mru(cache);
@@ -1420,11 +1560,47 @@ Exit:
 /****************************************************************************/
 /****************************************************************************/
 
-static struct resolv_cache*  _res_cache;
 static pthread_once_t        _res_cache_once;
 
+// Head of the list of caches.  Protected by _res_cache_list_lock.
+static struct resolv_cache_info _res_cache_list;
+
+// name of the current default inteface
+static char            _res_default_ifname[IF_NAMESIZE + 1];
+
+// lock protecting everything in the _resolve_cache_info structs (next ptr, etc)
+static pthread_mutex_t _res_cache_list_lock;
+
+
+/* lookup the default interface name */
+static char *_get_default_iface_locked();
+/* insert resolv_cache_info into the list of resolv_cache_infos */
+static void _insert_cache_info_locked(struct resolv_cache_info* cache_info);
+/* creates a resolv_cache_info */
+static struct resolv_cache_info* _create_cache_info( void );
+/* gets cache associated with an interface name, or NULL if none exists */
+static struct resolv_cache* _find_named_cache_locked(const char* ifname);
+/* gets a resolv_cache_info associated with an interface name, or NULL if not found */
+static struct resolv_cache_info* _find_cache_info_locked(const char* ifname);
+/* free dns name server list of a resolv_cache_info structure */
+static void _free_nameservers(struct resolv_cache_info* cache_info);
+/* look up the named cache, and creates one if needed */
+static struct resolv_cache* _get_res_cache_for_iface_locked(const char* ifname);
+/* empty the named cache */
+static void _flush_cache_for_iface_locked(const char* ifname);
+/* empty the nameservers set for the named cache */
+static void _free_nameservers_locked(struct resolv_cache_info* cache_info);
+/* lookup the namserver for the name interface */
+static int _get_nameserver_locked(const char* ifname, int n, char* addr, int addrLen);
+/* lookup the addr of the nameserver for the named interface */
+static struct addrinfo* _get_nameserver_addr_locked(const char* ifname, int n);
+/* lookup the inteface's address */
+static struct in_addr* _get_addr_locked(const char * ifname);
+
+
+
 static void
-_res_cache_init( void )
+_res_cache_init(void)
 {
     const char*  env = getenv(CONFIG_ENV);
 
@@ -1433,29 +1609,393 @@ _res_cache_init( void )
         return;
     }
 
-    _res_cache = _resolv_cache_create();
+    memset(&_res_default_ifname, 0, sizeof(_res_default_ifname));
+    memset(&_res_cache_list, 0, sizeof(_res_cache_list));
+    pthread_mutex_init(&_res_cache_list_lock, NULL);
 }
 
-
 struct resolv_cache*
-__get_res_cache( void )
+__get_res_cache(void)
 {
-    pthread_once( &_res_cache_once, _res_cache_init );
-    return _res_cache;
+    struct resolv_cache *cache;
+
+    pthread_once(&_res_cache_once, _res_cache_init);
+
+    pthread_mutex_lock(&_res_cache_list_lock);
+
+    char* ifname = _get_default_iface_locked();
+
+    // if default interface not set then use the first cache
+    // associated with an interface as the default one.
+    if (ifname[0] == '\0') {
+        struct resolv_cache_info* cache_info = _res_cache_list.next;
+        while (cache_info) {
+            if (cache_info->ifname[0] != '\0') {
+                ifname = cache_info->ifname;
+                break;
+            }
+
+            cache_info = cache_info->next;
+        }
+    }
+    cache = _get_res_cache_for_iface_locked(ifname);
+
+    pthread_mutex_unlock(&_res_cache_list_lock);
+    XLOG("_get_res_cache. default_ifname = %s\n", ifname);
+    return cache;
+}
+
+static struct resolv_cache*
+_get_res_cache_for_iface_locked(const char* ifname)
+{
+    if (ifname == NULL)
+        return NULL;
+
+    struct resolv_cache* cache = _find_named_cache_locked(ifname);
+    if (!cache) {
+        struct resolv_cache_info* cache_info = _create_cache_info();
+        if (cache_info) {
+            cache = _resolv_cache_create();
+            if (cache) {
+                int len = sizeof(cache_info->ifname);
+                cache_info->cache = cache;
+                strncpy(cache_info->ifname, ifname, len - 1);
+                cache_info->ifname[len - 1] = '\0';
+
+                _insert_cache_info_locked(cache_info);
+            } else {
+                free(cache_info);
+            }
+        }
+    }
+    return cache;
 }
 
 void
-_resolv_cache_reset( unsigned  generation )
+_resolv_cache_reset(unsigned  generation)
 {
     XLOG("%s: generation=%d", __FUNCTION__, generation);
 
-    if (_res_cache == NULL)
-        return;
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
 
-    pthread_mutex_lock( &_res_cache->lock );
-    if (_res_cache->generation != generation) {
-        _cache_flush_locked(_res_cache);
-        _res_cache->generation = generation;
+    char* ifname = _get_default_iface_locked();
+    // if default interface not set then use the first cache
+    // associated with an interface as the default one.
+    // Note: Copied the code from __get_res_cache since this
+    // method will be deleted/obsolete when cache per interface
+    // implemented all over
+    if (ifname[0] == '\0') {
+        struct resolv_cache_info* cache_info = _res_cache_list.next;
+        while (cache_info) {
+            if (cache_info->ifname[0] != '\0') {
+                ifname = cache_info->ifname;
+                break;
+            }
+
+            cache_info = cache_info->next;
+        }
     }
-    pthread_mutex_unlock( &_res_cache->lock );
+    struct resolv_cache* cache = _get_res_cache_for_iface_locked(ifname);
+
+    if (cache != NULL) {
+        pthread_mutex_lock( &cache->lock );
+        if (cache->generation != generation) {
+            _cache_flush_locked(cache);
+            cache->generation = generation;
+        }
+        pthread_mutex_unlock( &cache->lock );
+    }
+
+    pthread_mutex_unlock(&_res_cache_list_lock);
+}
+
+void
+_resolv_flush_cache_for_default_iface(void)
+{
+    char* ifname;
+
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
+
+    ifname = _get_default_iface_locked();
+    _flush_cache_for_iface_locked(ifname);
+
+    pthread_mutex_unlock(&_res_cache_list_lock);
+}
+
+void
+_resolv_flush_cache_for_iface(const char* ifname)
+{
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
+
+    _flush_cache_for_iface_locked(ifname);
+
+    pthread_mutex_unlock(&_res_cache_list_lock);
+}
+
+static void
+_flush_cache_for_iface_locked(const char* ifname)
+{
+    struct resolv_cache* cache = _find_named_cache_locked(ifname);
+    if (cache) {
+        pthread_mutex_lock(&cache->lock);
+        _cache_flush_locked(cache);
+        pthread_mutex_unlock(&cache->lock);
+    }
+}
+
+static struct resolv_cache_info*
+_create_cache_info(void)
+{
+    struct resolv_cache_info*  cache_info;
+
+    cache_info = calloc(sizeof(*cache_info), 1);
+    return cache_info;
+}
+
+static void
+_insert_cache_info_locked(struct resolv_cache_info* cache_info)
+{
+    struct resolv_cache_info* last;
+
+    for (last = &_res_cache_list; last->next; last = last->next);
+
+    last->next = cache_info;
+
+}
+
+static struct resolv_cache*
+_find_named_cache_locked(const char* ifname) {
+
+    struct resolv_cache_info* info = _find_cache_info_locked(ifname);
+
+    if (info != NULL) return info->cache;
+
+    return NULL;
+}
+
+static struct resolv_cache_info*
+_find_cache_info_locked(const char* ifname)
+{
+    if (ifname == NULL)
+        return NULL;
+
+    struct resolv_cache_info* cache_info = _res_cache_list.next;
+
+    while (cache_info) {
+        if (strcmp(cache_info->ifname, ifname) == 0) {
+            break;
+        }
+
+        cache_info = cache_info->next;
+    }
+    return cache_info;
+}
+
+static char*
+_get_default_iface_locked(void)
+{
+    char* iface = _res_default_ifname;
+
+    return iface;
+}
+
+void
+_resolv_set_default_iface(const char* ifname)
+{
+    XLOG("_resolv_set_default_if ifname %s\n",ifname);
+
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
+
+    int size = sizeof(_res_default_ifname);
+    memset(_res_default_ifname, 0, size);
+    strncpy(_res_default_ifname, ifname, size - 1);
+    _res_default_ifname[size - 1] = '\0';
+
+    pthread_mutex_unlock(&_res_cache_list_lock);
+}
+
+void
+_resolv_set_nameservers_for_iface(const char* ifname, char** servers, int numservers)
+{
+    int i, rt, index;
+    struct addrinfo hints;
+    char sbuf[NI_MAXSERV];
+
+    pthread_once(&_res_cache_once, _res_cache_init);
+
+    pthread_mutex_lock(&_res_cache_list_lock);
+    // creates the cache if not created
+    _get_res_cache_for_iface_locked(ifname);
+
+    struct resolv_cache_info* cache_info = _find_cache_info_locked(ifname);
+
+    if (cache_info != NULL) {
+        // free current before adding new
+        _free_nameservers_locked(cache_info);
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = PF_UNSPEC;
+        hints.ai_socktype = SOCK_DGRAM; /*dummy*/
+        hints.ai_flags = AI_NUMERICHOST;
+        sprintf(sbuf, "%u", NAMESERVER_PORT);
+
+        index = 0;
+        for (i = 0; i < numservers && i < MAXNS; i++) {
+            rt = getaddrinfo(servers[i], sbuf, &hints, &cache_info->nsaddrinfo[index]);
+            if (rt == 0) {
+                cache_info->nameservers[index] = strdup(servers[i]);
+                index++;
+            } else {
+                cache_info->nsaddrinfo[index] = NULL;
+            }
+        }
+    }
+    pthread_mutex_unlock(&_res_cache_list_lock);
+}
+
+static void
+_free_nameservers_locked(struct resolv_cache_info* cache_info)
+{
+    int i;
+    for (i = 0; i <= MAXNS; i++) {
+        free(cache_info->nameservers[i]);
+        cache_info->nameservers[i] = NULL;
+        if (cache_info->nsaddrinfo[i] != NULL) {
+            freeaddrinfo(cache_info->nsaddrinfo[i]);
+            cache_info->nsaddrinfo[i] = NULL;
+        }
+    }
+}
+
+int
+_resolv_cache_get_nameserver(int n, char* addr, int addrLen)
+{
+    char *ifname;
+    int result = 0;
+
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
+
+    ifname = _get_default_iface_locked();
+    result = _get_nameserver_locked(ifname, n, addr, addrLen);
+
+    pthread_mutex_unlock(&_res_cache_list_lock);
+    return result;
+}
+
+static int
+_get_nameserver_locked(const char* ifname, int n, char* addr, int addrLen)
+{
+    int len = 0;
+    char* ns;
+    struct resolv_cache_info* cache_info;
+
+    if (n < 1 || n > MAXNS || !addr)
+        return 0;
+
+    cache_info = _find_cache_info_locked(ifname);
+    if (cache_info) {
+        ns = cache_info->nameservers[n - 1];
+        if (ns) {
+            len = strlen(ns);
+            if (len < addrLen) {
+                strncpy(addr, ns, len);
+                addr[len] = '\0';
+            } else {
+                len = 0;
+            }
+        }
+    }
+
+    return len;
+}
+
+struct addrinfo*
+_cache_get_nameserver_addr(int n)
+{
+    struct addrinfo *result;
+    char* ifname;
+
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
+
+    ifname = _get_default_iface_locked();
+
+    result = _get_nameserver_addr_locked(ifname, n);
+    pthread_mutex_unlock(&_res_cache_list_lock);
+    return result;
+}
+
+static struct addrinfo*
+_get_nameserver_addr_locked(const char* ifname, int n)
+{
+    struct addrinfo* ai = NULL;
+    struct resolv_cache_info* cache_info;
+
+    if (n < 1 || n > MAXNS)
+        return NULL;
+
+    cache_info = _find_cache_info_locked(ifname);
+    if (cache_info) {
+        ai = cache_info->nsaddrinfo[n - 1];
+    }
+    return ai;
+}
+
+void
+_resolv_set_addr_of_iface(const char* ifname, struct in_addr* addr)
+{
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
+    struct resolv_cache_info* cache_info = _find_cache_info_locked(ifname);
+    if (cache_info) {
+        memcpy(&cache_info->ifaddr, addr, sizeof(*addr));
+
+        if (DEBUG) {
+            char* addr_s = inet_ntoa(cache_info->ifaddr);
+            XLOG("address of interface %s is %s\n", ifname, addr_s);
+        }
+    }
+    pthread_mutex_unlock(&_res_cache_list_lock);
+}
+
+struct in_addr*
+_resolv_get_addr_of_default_iface(void)
+{
+    struct in_addr* ai = NULL;
+    char* ifname;
+
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
+    ifname = _get_default_iface_locked();
+    ai = _get_addr_locked(ifname);
+    pthread_mutex_unlock(&_res_cache_list_lock);
+
+    return ai;
+}
+
+struct in_addr*
+_resolv_get_addr_of_iface(const char* ifname)
+{
+    struct in_addr* ai = NULL;
+
+    pthread_once(&_res_cache_once, _res_cache_init);
+    pthread_mutex_lock(&_res_cache_list_lock);
+    ai =_get_addr_locked(ifname);
+    pthread_mutex_unlock(&_res_cache_list_lock);
+    return ai;
+}
+
+static struct in_addr*
+_get_addr_locked(const char * ifname)
+{
+    struct resolv_cache_info* cache_info = _find_cache_info_locked(ifname);
+    if (cache_info) {
+        return &cache_info->ifaddr;
+    }
+    return NULL;
 }

@@ -113,8 +113,8 @@ __RCSID("$NetBSD: res_init.c,v 1.8 2006/03/19 03:10:08 christos Exp $");
 #define DNS_PROP_NAME_PREFIX "net.dns"
 #define DNS_CHANGE_PROP_NAME "net.dnschange"
 #define DNS_SEARCH_PROP_NAME "net.dns.search"
-const prop_info *dns_change_prop;
-int dns_last_change_counter;
+static const prop_info *dns_change_prop;
+static int dns_last_change_counter;
 static int _get_dns_change_count();
 #else
 #include <resolv.h>
@@ -170,7 +170,7 @@ res_ninit(res_state statp) {
 }
 
 #ifdef ANDROID_CHANGES
-int load_domain_search_list(res_state statp) {
+static int load_domain_search_list(res_state statp) {
 	char propvalue[PROP_VALUE_MAX];
 	register char *cp, **pp;
 
@@ -225,15 +225,15 @@ __res_vinit(res_state statp, int preinit) {
 	char dnsProperty[PROP_VALUE_MAX];
 #endif
 
+        if ((statp->options & RES_INIT) != 0U)
+                res_ndestroy(statp);
+
 	if (!preinit) {
 		statp->retrans = RES_TIMEOUT;
 		statp->retry = RES_DFLRETRY;
 		statp->options = RES_DEFAULT;
 		statp->id = res_randomid();
 	}
-
-	if ((statp->options & RES_INIT) != 0U)
-		res_ndestroy(statp);
 
 	memset(u, 0, sizeof(u));
 #ifdef USELOOPBACK

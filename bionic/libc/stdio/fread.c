@@ -39,38 +39,38 @@
 static int
 lflush(FILE *fp)
 {
-
     if ((fp->_flags & (__SLBF|__SWR)) == (__SLBF|__SWR))
-        return (__sflush(fp));
+        return (__sflush_locked(fp));
     return (0);
 }
 
 size_t
 fread(void *buf, size_t size, size_t count, FILE *fp)
 {
-	size_t resid;
-	char *p;
-	int r;
-	size_t total;
+    size_t resid;
+    char *p;
+    int r;
+    size_t total;
 
-	/*
-	 * The ANSI standard requires a return value of 0 for a count
-	 * or a size of 0.  Peculiarily, it imposes no such requirements
-	 * on fwrite; it only requires fread to be broken.
-	 */
-	if ((resid = count * size) == 0)
-		return (0);
-	if (fp->_r < 0)
-		fp->_r = 0;
-	total = resid;
-	p = buf;
+    /*
+     * The ANSI standard requires a return value of 0 for a count
+     * or a size of 0.  Peculiarily, it imposes no such requirements
+     * on fwrite; it only requires fread to be broken.
+     */
+    if ((resid = count * size) == 0)
+        return (0);
+    FLOCKFILE(fp);
+    if (fp->_r < 0)
+        fp->_r = 0;
+    total = resid;
+    p = buf;
 
 #if 1  /* BIONIC: optimize unbuffered reads */
     if (fp->_flags & __SNBF && fp->_ur == 0)
     {
-       /* the following comes mainly from __srefill(), with slight
-        * modifications
-        */
+        /* the following comes mainly from __srefill(), with slight
+         * modifications
+         */
 
         /* make sure stdio is set up */
         if (!__sdidinit)
@@ -79,45 +79,58 @@ fread(void *buf, size_t size, size_t count, FILE *fp)
         fp->_r = 0;     /* largely a convenience for callers */
 
         /* SysV does not make this test; take it out for compatibility */
-        if (fp->_flags & __SEOF)
+        if (fp->_flags & __SEOF) {
+            FUNLOCKFILE(fp);
             return (EOF);
+        }
 
         /* if not already reading, have to be reading and writing */
         if ((fp->_flags & __SRD) == 0) {
             if ((fp->_flags & __SRW) == 0) {
-                errno = EBADF;
                 fp->_flags |= __SERR;
+                FUNLOCKFILE(fp);
+                errno = EBADF;
                 return (EOF);
             }
             /* switch to reading */
             if (fp->_flags & __SWR) {
-                if (__sflush(fp))
+                if (__sflush(fp)) {
+                    FUNLOCKFILE(fp);
                     return (EOF);
+                }
                 fp->_flags &= ~__SWR;
                 fp->_w = 0;
                 fp->_lbfsize = 0;
             }
             fp->_flags |= __SRD;
         } else {
-           /*
-            * We were reading.  If there is an ungetc buffer,
-            * we must have been reading from that.  Drop it,
-            * restoring the previous buffer (if any).  If there
-            * is anything in that buffer, return.
-            */
+            /*
+             * We were reading.  If there is an ungetc buffer,
+             * we must have been reading from that.  Drop it,
+             * restoring the previous buffer (if any).  If there
+             * is anything in that buffer, return.
+             */
             if (HASUB(fp)) {
                 FREEUB(fp);
             }
         }
 
-       /*
-        * Before reading from a line buffered or unbuffered file,
-        * flush all line buffered output files, per the ANSI C
-        * standard.
-        */
+        /*
+         * Before reading from a line buffered or unbuffered file,
+         * flush all line buffered output files, per the ANSI C
+         * standard.
+         */
 
-        if (fp->_flags & (__SLBF|__SNBF))
+        if (fp->_flags & (__SLBF|__SNBF)) {
+            /* Ignore this file in _fwalk to deadlock. */
+            fp->_flags |= __SIGN;
             (void) _fwalk(lflush);
+            fp->_flags &= ~__SIGN;
+
+            /* Now flush this file without locking it. */
+            if ((fp->_flags & (__SLBF|__SWR)) == (__SLBF|__SWR))
+                __sflush(fp);
+        }
 
         while (resid > 0) {
             int   len = (*fp->_read)(fp->_cookie, p, resid );
@@ -128,11 +141,13 @@ fread(void *buf, size_t size, size_t count, FILE *fp)
                 else {
                     fp->_flags |= __SERR;
                 }
+                FUNLOCKFILE(fp);
                 return ((total - resid) / size);
             }
             p     += len;
             resid -= len;
         }
+        FUNLOCKFILE(fp);
         return (count);
     }
     else
@@ -146,13 +161,15 @@ fread(void *buf, size_t size, size_t count, FILE *fp)
             resid -= r;
             if (__srefill(fp)) {
                 /* no more input: return partial result */
+                FUNLOCKFILE(fp);
                 return ((total - resid) / size);
             }
         }
     }
 
-	(void)memcpy((void *)p, (void *)fp->_p, resid);
-	fp->_r -= resid;
-	fp->_p += resid;
-	return (count);
+    (void)memcpy((void *)p, (void *)fp->_p, resid);
+    fp->_r -= resid;
+    fp->_p += resid;
+    FUNLOCKFILE(fp);
+    return (count);
 }

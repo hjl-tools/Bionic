@@ -4,11 +4,11 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES:= \
 	arch/$(TARGET_ARCH)/begin.S \
 	linker.c \
+	linker_environ.c \
 	linker_format.c \
 	rt.c \
 	dlfcn.c \
-	debugger.c \
-	ba.c
+	debugger.c
 
 ifeq ($(TARGET_ARCH),sh)
 # SH-4A series virtual address range from 0x00000000 to 0x7FFFFFFF.
@@ -48,7 +48,7 @@ ifeq ($(TARGET_ARCH),arm)
 LOCAL_CFLAGS += -DANDROID_ARM_LINKER
 else
   ifeq ($(TARGET_ARCH),x86)
-    LOCAL_CFLAGS += -DANDROID_X86_LINKER -DNO_CTORS_SECTIONS
+    LOCAL_CFLAGS += -DANDROID_X86_LINKER
   else
     ifeq ($(TARGET_ARCH),sh)
       LOCAL_CFLAGS += -DANDROID_SH_LINKER
@@ -60,7 +60,7 @@ endif
 
 LOCAL_MODULE:= linker
 
-LOCAL_STATIC_LIBRARIES := libcutils libc_nomalloc
+LOCAL_STATIC_LIBRARIES := libc_nomalloc
 
 #LOCAL_FORCE_STATIC_EXECUTABLE := true # not necessary when not including BUILD_EXECUTABLE
 
@@ -75,8 +75,6 @@ LOCAL_STATIC_LIBRARIES := libcutils libc_nomalloc
 LOCAL_MODULE_CLASS := EXECUTABLES
 LOCAL_MODULE_SUFFIX := $(TARGET_EXECUTABLE_SUFFIX)
 
-# Executables are not prelinked.
-LOCAL_PRELINK_MODULE := false
 
 include $(BUILD_SYSTEM)/dynamic_binary.mk
 
@@ -93,6 +91,6 @@ $(linked_module): $(TARGET_CRTBEGIN_STATIC_O) $(all_objects) $(all_libraries) $(
 # just for this module
 $(LOCAL_BUILT_MODULE): TARGET_CRTBEGIN_STATIC_O :=
 # This line is not strictly necessary because the dynamic linker is built
-# as a static executable, but it won't hurt if in the future we start 
+# as a static executable, but it won't hurt if in the future we start
 # building the linker as a dynamic one.
 $(LOCAL_BUILT_MODULE): TARGET_CRTBEGIN_DYNAMIC_O :=

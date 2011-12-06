@@ -14,6 +14,6 @@
 # limitations under the License.
 #
 
-ifneq ($(TARGET_SIMULATOR),true)
-  include $(call all-subdir-makefiles)
-endif
+LOCAL_PATH := $(call my-dir)
+
+include $(call all-subdir-makefiles)

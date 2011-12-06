@@ -35,11 +35,12 @@ typedef struct
     void (**preinit_array)(void);
     void (**init_array)(void);
     void (**fini_array)(void);
-#ifndef NO_CTORS_SECTIONS
+#if !defined __i386__ && !defined __x86_64__
     void (**ctors_array)(void);
 #endif
 } structors_array_t;
 
 extern void __libc_init_common(uintptr_t *elfdata);
+extern void __libc_fini(void* finit_array);
 
 #endif

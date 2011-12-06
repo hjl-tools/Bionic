@@ -43,12 +43,28 @@
 #include <memory.h>
 #include <assert.h>
 #include <malloc.h>
-#include <linux/futex.h>
+#include <bionic_futex.h>
+#include <bionic_atomic_inline.h>
+#include <sys/prctl.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <bionic_pthread.h>
 
 extern int  __pthread_clone(int (*fn)(void*), void *child_stack, int flags, void *arg);
 extern void _exit_with_stack_teardown(void * stackBase, int stackSize, int retCode);
 extern void _exit_thread(int  retCode);
 extern int  __set_errno(int);
+
+int  __futex_wake_ex(volatile void *ftx, int pshared, int val)
+{
+    return __futex_syscall3(ftx, pshared ? FUTEX_WAKE : FUTEX_WAKE_PRIVATE, val);
+}
+
+int  __futex_wait_ex(volatile void *ftx, int pshared, int val, const struct timespec *timeout)
+{
+    return __futex_syscall4(ftx, pshared ? FUTEX_WAIT : FUTEX_WAIT_PRIVATE, val, timeout);
+}
 
 #define  __likely(cond)    __builtin_expect(!!(cond), 1)
 #define  __unlikely(cond)  __builtin_expect(!!(cond), 0)
@@ -187,6 +203,9 @@ void __thread_entry(int (*func)(void*), void *arg, void **tls)
 
     // Wait for our creating thread to release us. This lets it have time to
     // notify gdb about this thread before it starts doing anything.
+    //
+    // This also provides the memory barrier needed to ensure that all memory
+    // accesses previously made by the creating thread are visible to us.
     pthread_mutex_t * start_mutex = (pthread_mutex_t *)&tls[TLS_SLOT_SELF];
     pthread_mutex_lock(start_mutex);
     pthread_mutex_destroy(start_mutex);
@@ -255,7 +274,7 @@ done:
 }
 
 /*
- * Create a new thread. The thread's stack is layed out like so:
+ * Create a new thread. The thread's stack is laid out like so:
  *
  * +---------------------------+
  * |     pthread_internal_t    |
@@ -325,6 +344,10 @@ int pthread_create(pthread_t *thread_out, pthread_attr_t const * attr,
 
     // Create a mutex for the thread in TLS_SLOT_SELF to wait on once it starts so we can keep
     // it from doing anything until after we notify the debugger about it
+    //
+    // This also provides the memory barrier we need to ensure that all
+    // memory accesses previously performed by this thread are visible to
+    // the new thread.
     start_mutex = (pthread_mutex_t *) &tls[TLS_SLOT_SELF];
     pthread_mutex_init(start_mutex, NULL);
     pthread_mutex_lock(start_mutex);
@@ -548,6 +571,7 @@ void pthread_exit(void * retval)
     void*                stack_base = thread->attr.stack_base;
     int                  stack_size = thread->attr.stack_size;
     int                  user_stack = (thread->attr.flags & PTHREAD_ATTR_FLAG_USER_STACK) != 0;
+    sigset_t mask;
 
     // call the cleanup handlers first
     while (thread->cleanup_stack) {
@@ -589,6 +613,10 @@ void pthread_exit(void * retval)
         }
         pthread_mutex_unlock(&gThreadListLock);
     }
+
+    sigfillset(&mask);
+    sigdelset(&mask, SIGSEGV);
+    (void)sigprocmask(SIG_SETMASK, &mask, (sigset_t *)NULL);
 
     // destroy the thread stack
     if (user_stack)
@@ -717,24 +745,6 @@ int pthread_setschedparam(pthread_t thid, int policy,
     return ret;
 }
 
-
-int __futex_wait(volatile void *ftx, int val, const struct timespec *timeout);
-int __futex_wake(volatile void *ftx, int count);
-
-int __futex_syscall3(volatile void *ftx, int op, int val);
-int __futex_syscall4(volatile void *ftx, int op, int val, const struct timespec *timeout);
-
-#ifndef FUTEX_PRIVATE_FLAG
-#define FUTEX_PRIVATE_FLAG  128
-#endif
-
-#ifndef FUTEX_WAIT_PRIVATE
-#define FUTEX_WAIT_PRIVATE  (FUTEX_WAIT|FUTEX_PRIVATE_FLAG)
-#endif
-
-#ifndef FUTEX_WAKE_PRIVATE
-#define FUTEX_WAKE_PRIVATE  (FUTEX_WAKE|FUTEX_PRIVATE_FLAG)
-#endif
 
 // mutex lock states
 //
@@ -889,8 +899,13 @@ int pthread_mutex_init(pthread_mutex_t *mutex,
 
 int pthread_mutex_destroy(pthread_mutex_t *mutex)
 {
-    if (__unlikely(mutex == NULL))
-        return EINVAL;
+    int ret;
+
+    /* use trylock to ensure that the mutex value is
+     * valid and is not already locked. */
+    ret = pthread_mutex_trylock(mutex);
+    if (ret != 0)
+        return ret;
 
     mutex->value = 0xdead10cc;
     return 0;
@@ -937,11 +952,10 @@ _normal_lock(pthread_mutex_t*  mutex)
          * that the mutex is in state 2 when we go to sleep on it, which
          * guarantees a wake-up call.
          */
-        int  wait_op = shared ? FUTEX_WAIT : FUTEX_WAIT_PRIVATE;
-
         while (__atomic_swap(shared|2, &mutex->value ) != (shared|0))
-            __futex_syscall4(&mutex->value, wait_op, shared|2, 0);
+            __futex_wait_ex(&mutex->value, shared, shared|2, 0);
     }
+    ANDROID_MEMBAR_FULL();
 }
 
 /*
@@ -951,6 +965,8 @@ _normal_lock(pthread_mutex_t*  mutex)
 static __inline__ void
 _normal_unlock(pthread_mutex_t*  mutex)
 {
+    ANDROID_MEMBAR_FULL();
+
     /* We need to preserve the shared flag during operations */
     int  shared = mutex->value & MUTEX_SHARED_MASK;
 
@@ -960,7 +976,6 @@ _normal_unlock(pthread_mutex_t*  mutex)
      * if it wasn't 1 we have to do some additional work.
      */
     if (__atomic_dec(&mutex->value) != (shared|1)) {
-        int  wake_op = shared ? FUTEX_WAKE : FUTEX_WAKE_PRIVATE;
         /*
          * Start by releasing the lock.  The decrement changed it from
          * "contended lock" to "uncontended lock", which means we still
@@ -998,7 +1013,7 @@ _normal_unlock(pthread_mutex_t*  mutex)
          * Either way we have correct behavior and nobody is orphaned on
          * the wait queue.
          */
-        __futex_syscall3(&mutex->value, wake_op, 1);
+        __futex_wake_ex(&mutex->value, shared, 1);
     }
 }
 
@@ -1018,7 +1033,7 @@ _recursive_unlock(void)
 
 int pthread_mutex_lock(pthread_mutex_t *mutex)
 {
-    int mtype, tid, new_lock_type, shared, wait_op;
+    int mtype, tid, new_lock_type, shared;
 
     if (__unlikely(mutex == NULL))
         return EINVAL;
@@ -1063,8 +1078,7 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
     new_lock_type = 1;
 
     /* compute futex wait opcode and restore shared flag in mtype */
-    wait_op = shared ? FUTEX_WAIT : FUTEX_WAIT_PRIVATE;
-    mtype  |= shared;
+    mtype |= shared;
 
     for (;;) {
         int  oldv;
@@ -1090,7 +1104,7 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
          */
         new_lock_type = 2;
 
-        __futex_syscall4(&mutex->value, wait_op, oldv, NULL);
+        __futex_wait_ex(&mutex->value, shared, oldv, NULL);
     }
     return 0;
 }
@@ -1130,8 +1144,7 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
 
     /* Wake one waiting thread, if any */
     if ((oldv & 3) == 2) {
-        int wake_op = shared ? FUTEX_WAKE : FUTEX_WAKE_PRIVATE;
-        __futex_syscall3(&mutex->value, wake_op, 1);
+        __futex_wake_ex(&mutex->value, shared, 1);
     }
     return 0;
 }
@@ -1150,8 +1163,10 @@ int pthread_mutex_trylock(pthread_mutex_t *mutex)
     /* Handle common case first */
     if ( __likely(mtype == MUTEX_TYPE_NORMAL) )
     {
-        if (__atomic_cmpxchg(shared|0, shared|1, &mutex->value) == 0)
+        if (__atomic_cmpxchg(shared|0, shared|1, &mutex->value) == 0) {
+            ANDROID_MEMBAR_FULL();
             return 0;
+        }
 
         return EBUSY;
     }
@@ -1231,7 +1246,7 @@ int pthread_mutex_lock_timeout_np(pthread_mutex_t *mutex, unsigned msecs)
     clockid_t        clock = CLOCK_MONOTONIC;
     struct timespec  abstime;
     struct timespec  ts;
-    int              mtype, tid, oldv, new_lock_type, shared, wait_op;
+    int              mtype, tid, oldv, new_lock_type, shared;
 
     /* compute absolute expiration time */
     __timespec_to_relative_msec(&abstime, msecs, clock);
@@ -1245,19 +1260,20 @@ int pthread_mutex_lock_timeout_np(pthread_mutex_t *mutex, unsigned msecs)
     /* Handle common case first */
     if ( __likely(mtype == MUTEX_TYPE_NORMAL) )
     {
-        int  wait_op = shared ? FUTEX_WAIT : FUTEX_WAIT_PRIVATE;
-
-        /* fast path for unconteded lock */
-        if (__atomic_cmpxchg(shared|0, shared|1, &mutex->value) == 0)
+        /* fast path for uncontended lock */
+        if (__atomic_cmpxchg(shared|0, shared|1, &mutex->value) == 0) {
+            ANDROID_MEMBAR_FULL();
             return 0;
+        }
 
         /* loop while needed */
         while (__atomic_swap(shared|2, &mutex->value) != (shared|0)) {
             if (__timespec_to_absolute(&ts, &abstime, clock) < 0)
                 return EBUSY;
 
-            __futex_syscall4(&mutex->value, wait_op, shared|2, &ts);
+            __futex_wait_ex(&mutex->value, shared, shared|2, &ts);
         }
+        ANDROID_MEMBAR_FULL();
         return 0;
     }
 
@@ -1288,7 +1304,6 @@ int pthread_mutex_lock_timeout_np(pthread_mutex_t *mutex, unsigned msecs)
     new_lock_type = 1;
 
     /* Compute wait op and restore sharing bit in mtype */
-    wait_op = shared ? FUTEX_WAIT : FUTEX_WAIT_PRIVATE;
     mtype  |= shared;
 
     for (;;) {
@@ -1319,7 +1334,7 @@ int pthread_mutex_lock_timeout_np(pthread_mutex_t *mutex, unsigned msecs)
         if (__timespec_to_absolute(&ts, &abstime, clock) < 0)
             return EBUSY;
 
-        __futex_syscall4(&mutex->value, wait_op, oldv, &ts);
+        __futex_wait_ex(&mutex->value, shared, oldv, &ts);
     }
     return 0;
 }
@@ -1412,7 +1427,6 @@ static int
 __pthread_cond_pulse(pthread_cond_t *cond, int  counter)
 {
     long flags;
-    int  wake_op;
 
     if (__unlikely(cond == NULL))
         return EINVAL;
@@ -1426,8 +1440,19 @@ __pthread_cond_pulse(pthread_cond_t *cond, int  counter)
             break;
     }
 
-    wake_op = COND_IS_SHARED(cond) ? FUTEX_WAKE : FUTEX_WAKE_PRIVATE;
-    __futex_syscall3(&cond->value, wake_op, counter);
+    /*
+     * Ensure that all memory accesses previously made by this thread are
+     * visible to the woken thread(s).  On the other side, the "wait"
+     * code will issue any necessary barriers when locking the mutex.
+     *
+     * This may not strictly be necessary -- if the caller follows
+     * recommended practice and holds the mutex before signaling the cond
+     * var, the mutex ops will provide correct semantics.  If they don't
+     * hold the mutex, they're subject to race conditions anyway.
+     */
+    ANDROID_MEMBAR_FULL();
+
+    __futex_wake_ex(&cond->value, COND_IS_SHARED(cond), counter);
     return 0;
 }
 
@@ -1452,10 +1477,9 @@ int __pthread_cond_timedwait_relative(pthread_cond_t *cond,
 {
     int  status;
     int  oldvalue = cond->value;
-    int  wait_op  = COND_IS_SHARED(cond) ? FUTEX_WAIT : FUTEX_WAIT_PRIVATE;
 
     pthread_mutex_unlock(mutex);
-    status = __futex_syscall4(&cond->value, wait_op, oldvalue, reltime);
+    status = __futex_wait_ex(&cond->value, COND_IS_SHARED(cond), oldvalue, reltime);
     pthread_mutex_lock(mutex);
 
     if (status == (-ETIMEDOUT)) return ETIMEDOUT;
@@ -1837,7 +1861,21 @@ int pthread_kill(pthread_t tid, int sig)
     return ret;
 }
 
-extern int __rt_sigprocmask(int, const sigset_t *, sigset_t *, size_t);
+/* Despite the fact that our kernel headers define sigset_t explicitly
+ * as a 32-bit integer, the kernel system call really expects a 64-bit
+ * bitmap for the signal set, or more exactly an array of two-32-bit
+ * values (see $KERNEL/arch/$ARCH/include/asm/signal.h for details).
+ *
+ * Unfortunately, we cannot fix the sigset_t definition without breaking
+ * the C library ABI, so perform a little runtime translation here.
+ */
+typedef union {
+    sigset_t   bionic;
+    uint32_t   kernel[2];
+} kernel_sigset_t;
+
+/* this is a private syscall stub */
+extern int __rt_sigprocmask(int, const kernel_sigset_t *, kernel_sigset_t *, size_t);
 
 int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset)
 {
@@ -1846,9 +1884,30 @@ int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset)
      */
     int ret, old_errno = errno;
 
-    ret = __rt_sigprocmask(how, set, oset, _NSIG / 8);
+    /* We must convert *set into a kernel_sigset_t */
+    kernel_sigset_t  in_set, *in_set_ptr;
+    kernel_sigset_t  out_set;
+
+    in_set.kernel[0]  = in_set.kernel[1]  =  0;
+    out_set.kernel[0] = out_set.kernel[1] = 0;
+
+    /* 'in_set_ptr' is the second parameter to __rt_sigprocmask. It must be NULL
+     * if 'set' is NULL to ensure correct semantics (which in this case would
+     * be to ignore 'how' and return the current signal set into 'oset'.
+      */
+    if (set == NULL) {
+        in_set_ptr = NULL;
+    } else {
+        in_set.bionic = *set;
+        in_set_ptr = &in_set;
+    }
+
+    ret = __rt_sigprocmask(how, in_set_ptr, &out_set, sizeof(kernel_sigset_t));
     if (ret < 0)
         ret = errno;
+
+    if (oset)
+        *oset = out_set.bionic;
 
     errno = old_errno;
     return ret;
@@ -1873,15 +1932,82 @@ int pthread_getcpuclockid(pthread_t  tid, clockid_t  *clockid)
  */
 int  pthread_once( pthread_once_t*  once_control,  void (*init_routine)(void) )
 {
-    static pthread_mutex_t   once_lock = PTHREAD_MUTEX_INITIALIZER;
+    static pthread_mutex_t   once_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+    volatile pthread_once_t* ocptr = once_control;
 
-    if (*once_control == PTHREAD_ONCE_INIT) {
-        _normal_lock( &once_lock );
-        if (*once_control == PTHREAD_ONCE_INIT) {
+    pthread_once_t tmp = *ocptr;
+    ANDROID_MEMBAR_FULL();
+    if (tmp == PTHREAD_ONCE_INIT) {
+        pthread_mutex_lock( &once_lock );
+        if (*ocptr == PTHREAD_ONCE_INIT) {
             (*init_routine)();
-            *once_control = ~PTHREAD_ONCE_INIT;
+            ANDROID_MEMBAR_FULL();
+            *ocptr = ~PTHREAD_ONCE_INIT;
         }
-        _normal_unlock( &once_lock );
+        pthread_mutex_unlock( &once_lock );
     }
     return 0;
+}
+
+/* This value is not exported by kernel headers, so hardcode it here */
+#define MAX_TASK_COMM_LEN	16
+#define TASK_COMM_FMT 		"/proc/self/task/%u/comm"
+
+int pthread_setname_np(pthread_t thid, const char *thname)
+{
+    size_t thname_len;
+    int saved_errno, ret;
+
+    if (thid == 0 || thname == NULL)
+        return EINVAL;
+
+    thname_len = strlen(thname);
+    if (thname_len >= MAX_TASK_COMM_LEN)
+        return ERANGE;
+
+    saved_errno = errno;
+    if (thid == pthread_self())
+    {
+        ret = prctl(PR_SET_NAME, (unsigned long)thname, 0, 0, 0) ? errno : 0;
+    }
+    else
+    {
+        /* Have to change another thread's name */
+        pthread_internal_t *thread = (pthread_internal_t *)thid;
+        char comm_name[sizeof(TASK_COMM_FMT) + 8];
+        ssize_t n;
+        int fd;
+
+        snprintf(comm_name, sizeof(comm_name), TASK_COMM_FMT, (unsigned int)thread->kernel_id);
+        fd = open(comm_name, O_RDWR);
+        if (fd == -1)
+        {
+            ret = errno;
+            goto exit;
+        }
+        n = TEMP_FAILURE_RETRY(write(fd, thname, thname_len));
+        close(fd);
+
+        if (n < 0)
+            ret = errno;
+        else if ((size_t)n != thname_len)
+            ret = EIO;
+        else
+            ret = 0;
+    }
+exit:
+    errno = saved_errno;
+    return ret;
+}
+
+/* Return the kernel thread ID for a pthread.
+ * This is only defined for implementations where pthread <-> kernel is 1:1, which this is.
+ * Not the same as pthread_getthreadid_np, which is commonly defined to be opaque.
+ * Internal, not an NDK API.
+ */
+
+pid_t __pthread_gettid(pthread_t thid)
+{
+    pthread_internal_t* thread = (pthread_internal_t*)thid;
+    return thread->kernel_id;
 }

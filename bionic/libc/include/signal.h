@@ -42,15 +42,19 @@ __BEGIN_DECLS
 
 typedef int sig_atomic_t;
 
-/* crepy NIG / _NSIG handling, just to be safe */
-#ifndef NSIG
-#  define NSIG  _NSIG
-#endif
+/* _NSIG is used by the SIGRTMAX definition under <asm/signal.h>, however
+ * its definition is part of a #if __KERNEL__ .. #endif block in the original
+ * kernel headers and is thus not part of our cleaned-up versions.
+ *
+ * Looking at the current kernel sources, it is defined as 64 for all
+ * architectures except for the 'mips' one which set it to 128.
+ */
 #ifndef _NSIG
-#  define _NSIG  NSIG
+#  define _NSIG  64
 #endif
 
 extern const char * const sys_siglist[];
+extern const char * const sys_signame[];
 
 static __inline__ int sigismember(sigset_t *set, int signum)
 {
@@ -119,6 +123,7 @@ extern int siginterrupt(int  sig, int  flag);
 extern int raise(int);
 extern int kill(pid_t, int);
 extern int killpg(int pgrp, int sig);
+extern int sigaltstack(const stack_t *ss, stack_t *oss);
 
 
 __END_DECLS
