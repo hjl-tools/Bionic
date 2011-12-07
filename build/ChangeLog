@@ -1,3 +1,9 @@
+2011-12-07  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile (libm_common_src_files): Add sincos.c.
+	(DYNAMIC_LIBSTDCXX): Add $(LIBGCC) after $(LIBSUPCXX).
+	(STATIC_LIBSTDCXX): Likewise.
+
 2011-06-13  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* test/hello.c (hello): New.

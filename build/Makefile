@@ -561,6 +561,7 @@ DYNAMIC_LIBC=$(libc.so_LIB) $(libdl.so_LIB) $(LIBGCC)
 libm_common_src_files:= \
 	isinf.c  \
 	fpclassify.c \
+	sincos.c \
 	bsdsrc/b_exp.c \
 	bsdsrc/b_log.c \
 	bsdsrc/b_tgamma.c \
@@ -774,11 +775,11 @@ libstdc++.so_DEPS=$(libc.so_LIB)
 libstdc++.so_LIBS=$(LIBGCC) $(LIBSUPCXX) $(LIBGCC)
 
 DYNAMIC_LIBSTDCXX=$(libstdc++.so_LIB) \
-	$(LIBGCC) $(LIBSUPCXX) \
+	$(LIBGCC) $(LIBSUPCXX) $(LIBGCC) \
 	$(libc.so_LIB)
 
 STATIC_LIBSTDCXX=$(libstdc++.a_LIB) \
-	$(LIBGCC) $(LIBSUPCXX) \
+	$(LIBGCC) $(LIBSUPCXX) $(LIBGCC) \
 	$(libc.a_LIB) $(LIBGCC)
 
 LINKER_SRC_FILES:= \
