@@ -1068,6 +1068,8 @@ $(libm.so_LIB): $(libc.so_LIB)
 
 $(libstdc++.so_LIB): $(libc.so_LIB)
 
+$(libexception-foo.so_LIB): $(libc.so_LIB) $(libstdc++.so_LIB)
+
 $(LIB_DIR)/ld.so: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS)
 	$(CC) $(CFLAGS) $($(@F)_LDFLAGS) -o $@ -nostdlib -Wl,-Bstatic \
 		 $($(@F)_OBJS) $($(@F)_DEPS) $(LIB_DIR)/crtend_android.o

@@ -1,5 +1,10 @@
 2011-12-08  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile ($(libexception-foo.so_LIB)): Depend on $(libc.so_LIB)
+	$(libstdc++.so_LIB).
+
+2011-12-08  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile: Build and run libexception-foo.so and
 	exception-main.dynamic.
 
