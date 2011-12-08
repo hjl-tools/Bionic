@@ -1,3 +1,14 @@
+2011-12-07  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile (CFLAGS): Put back -march=atom -mbionic for x86.
+	(CFLAGS): Re-order.
+	(libc_common_src_files): Add unistd/mmap.c if not x32.
+	(LINKER_CFLAGS): Replace -I$(BIONIC_LIBC_DIR)/private with
+	-I$(BIONIC_LINKER_DIR).
+	(OBJS): Don't set to X32 one.
+	(SHARED_LIBS): Likewise.
+	(STATIC_LIBS): Likewise.
+
 2011-02-12  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* Makefile (libc_common_src_files): Remove unistd/lseek64.c,

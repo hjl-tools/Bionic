@@ -26,7 +26,7 @@ CPP_FLAGS=-Ulinux -D__ANDROID__ -DANDROID -DUSE_SSSE3 -DUSE_SSE2 -DPIC
 CPP_FLAGS+=-DSHARED
 CPP_FLAGS+=-DANDROID_SMP=1
 ifeq ($(ARCH),x86)
-CFLAGS=-m32
+CFLAGS=-m32 -march=atom -mbionic
 else
 CFLAGS=-mx32
 endif
@@ -34,7 +34,7 @@ CFLAGS+=-fPIC -fno-exceptions $(INCLUDES) $(CPP_FLAGS)
 LIBGCC=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 LIBSUPCXX?=$(shell $(CC) $(CFLAGS) -print-file-name=libsupc++.a)
 
-CFLAGS+=-g -O2
+CFLAGS+=-O2 -g
 
 LDFLAGS=-Wl,-z,nocombreloc
 SHLIB_LDFLAGS=-Wl,-Bsymbolic -Wl,-O1 -Wl,--no-undefined
@@ -449,7 +449,8 @@ libc_common_src_files+= \
 	arch-$(ARCH)/bionic/mmap.S 
 else
 libc_common_src_files+= \
-	unistd/lseek64.c
+	unistd/lseek64.c \
+	unistd/mmap.c
 endif
 
 # this is needed for static versions of libc
@@ -816,7 +817,7 @@ LINKER_CFLAGS += -DLINKER_DEBUG=0
 # we need to access the Bionic private header <bionic_tls.h>
 # in the linker; duplicate the HAVE_ARM_TLS_REGISTER definition
 # from the libc build
-LINKER_CFLAGS += -I$(BIONIC_LIBC_DIR)/private
+LINKER_CFLAGS += -I$(BIONIC_LINKER_DIR)
 LINKER_CFLAGS += -I$(CORE_INCLUDE_DIR)
 
 ifeq ($(ARCH),x86)
@@ -899,9 +900,11 @@ EXES+=$(pr47383.dynamic_EXE)
 
 VPATH+=test
 
+ifeq (X$(ARCH),x32)
 OBJS=$(X32OBJS)
 SHARED_LIBS=$(X32SHARED_LIBS)
 STATIC_LIBS=$(X32STATIC_LIBS)
+endif
 
 #$(init-mixed_OBJS): CFLAGS+=-O0 -g
 
