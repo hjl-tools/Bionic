@@ -1,3 +1,11 @@
+2011-12-08  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile: Build and run libexception-foo.so and
+	exception-main.dynamic.
+
+	* test/exception-foo.cc: New.
+	* test/exception-main.cc: Likewise.
+
 2011-12-07  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* Makefile (libm_common_src_files): Add sincos.c.

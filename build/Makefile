@@ -885,6 +885,28 @@ $(test_basic_exceptions_OBJS): CFLAGS += -fexceptions
 
 $(test_basic_exceptions_OBJS): CFLAGS += $(libstdc++_common_cflags)
 
+libexception-foo.so_OBJS=exception-foo.o
+libexception-foo.so_OBJS:=$(addprefix $(OBJ_DIR)/, $(libexception-foo.so_OBJS))
+OBJS+=$(libexception-foo.so_OBJS)
+X32OBJS+=$(libexception-foo.so_OBJS)
+libexception-foo.so_LIB=libexception-foo.so
+libexception-foo.so_LIB:=$(addprefix $(LIB_DIR)/, $(libexception-foo.so_LIB))
+libexception-foo.so_LIBS = $(DYNAMIC_LIBSTDCXX)
+$(libexception-foo.so_OBJS): CFLAGS += -fexceptions
+
+exception-main_OBJS=exception-main.o
+exception-main_OBJS:=$(addprefix $(OBJ_DIR)/, $(exception-main_OBJS))
+OBJS+=$(exception-main_OBJS)
+X32OBJS+=$(exception-main_OBJS)
+exception-main.dynamic_OBJS=$(exception-main_OBJS)
+exception-main.dynamic_EXE=exception-main.dynamic
+exception-main.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(exception-main.dynamic_EXE))
+exception-main.dynamic_DEPS= $(libexception-foo.so_LIB)
+EXES+=$(exception-main.dynamic_EXE)
+$(exception-main_OBJS): CFLAGS += -fexceptions
+
+$(exception-main_OBJS): CFLAGS += $(libstdc++_common_cflags)
+
 pr47383_OBJS=pr47383.o
 pr47383_OBJS:=$(addprefix $(OBJ_DIR)/, $(pr47383_OBJS))
 OBJS+=$(pr47383_OBJS)
@@ -1068,6 +1090,10 @@ $(EXE_DIR)/test_basic_exceptions.static: $(OBJS) $(STATIC_LIBS)
 	$(build-static-c++-executable)
 
 $(EXE_DIR)/test_basic_exceptions.dynamic: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB)
+	-mkdir -p $(@D)
+	$(build-dynamic-c++-executable)
+
+$(EXE_DIR)/exception-main.dynamic: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB) $(libexception-foo.so_LIB)
 	-mkdir -p $(@D)
 	$(build-dynamic-c++-executable)
 
