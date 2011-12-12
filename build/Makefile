@@ -20,7 +20,14 @@ INCLUDES=\
 	-I$(BIONIC_LIBC_DIR)/kernel \
 	-I$(BIONIC_LIBC_DIR)/kernel/common \
 	-I$(BIONIC_LIBM_DIR)/include \
-	-I$(BIONIC_LIBM_DIR)/include/i387 \
+
+ifeq ($(ARCH),x86)
+INCLUDES+=-I$(BIONIC_LIBM_DIR)/include/i387
+endif
+
+ifeq ($(ARCH),x32)
+INCLUDES+=-I$(BIONIC_LIBM_DIR)/include/amd64
+endif
 
 CPP_FLAGS=-Ulinux -D__ANDROID__ -DANDROID -DUSE_SSSE3 -DUSE_SSE2 -DPIC
 CPP_FLAGS+=-DSHARED
@@ -52,17 +59,14 @@ crt_OBJS=crtbegin_dynamic.o crtbegin_so.o crtbegin_static.o \
  	 crtend_android.o crtend_so.o
 crt_OBJS:=$(addprefix $(LIB_DIR)/, $(crt_OBJS))
 OBJS+=$(crt_OBJS)
-X32OBJS+=$(crt_OBJS)
 VPATH+=$(BIONIC_LIBC_DIR)/arch-$(ARCH)/bionic
 
 libdl.so_OBJS=libdl.os
 libdl.so_OBJS:=$(addprefix $(OBJ_DIR)/, $(libdl.so_OBJS))
 OBJS+=$(libdl.so_OBJS)
-X32OBJS+=$(libdl.so_OBJS)
 libdl.so_LIB=libdl.so
 libdl.so_LIB:=$(addprefix $(LIB_DIR)/, $(libdl.so_LIB))
 SHARED_LIBS+=$(libdl.so_LIB)
-X32SHARED_LIBS+=$(libdl.so_LIB)
 VPATH+=$(BIONIC_LIBDL_DIR)
 
 libdl.so_LDFLAGS=-Wl,-Bsymbolic -Wl,-O1
@@ -445,6 +449,10 @@ endif
 
 ifeq ($(ARCH),x32)
 libc_common_src_files+= \
+	arch-$(ARCH)/bionic/__rt_sigreturn.S \
+	arch-$(ARCH)/bionic/__sigsuspend.c \
+	arch-$(ARCH)/bionic/sigaction.c \
+	arch-$(ARCH)/bionic/sigprocmask.c \
 	arch-$(ARCH)/bionic/lseek.S \
 	arch-$(ARCH)/bionic/mmap.S 
 else
@@ -512,11 +520,9 @@ libc_nomalloc_src_files := \
 libc_nomalloc.a_OBJS=$(addsuffix .os, $(basename $(libc_nomalloc_src_files)))
 libc_nomalloc.a_OBJS:=$(addprefix $(OBJ_DIR)/, $(libc_nomalloc.a_OBJS))
 OBJS+=$(libc_nomalloc.a_OBJS)
-X32OBJS+=$(libc_nomalloc.a_OBJS)
 libc_nomalloc.a_LIB=libc_nomalloc.a
 libc_nomalloc.a_LIB:=$(addprefix $(LIB_DIR)/, $(libc_nomalloc.a_LIB))
 STATIC_LIBS+=$(libc_nomalloc.a_LIB)
-X32STATIC_LIBS+=$(libc_nomalloc.a_LIB)
 
 $(libc_nomalloc.a_OBJS): CFLAGS += $(libc_common_cflags)
 
@@ -524,11 +530,9 @@ libc.a_src_files=$(libc_nomalloc_src_files) $(malloc_src_files)
 libc.a_OBJS=$(addsuffix .o, $(basename $(libc.a_src_files)))
 libc.a_OBJS:=$(addprefix $(OBJ_DIR)/, $(libc.a_OBJS))
 OBJS+=$(libc.a_OBJS)
-X32OBJS+=$(libc.a_OBJS)
 libc.a_LIB=libc.a
 libc.a_LIB:=$(addprefix $(LIB_DIR)/, $(libc.a_LIB))
 STATIC_LIBS+=$(libc.a_LIB)
-X32STATIC_LIBS+=$(libc.a_LIB)
 
 $(libc.a_OBJS): CFLAGS += $(libc_common_cflags) -DLIBC_STATIC
 
@@ -548,11 +552,9 @@ libc.so_src_files := \
 libc.so_OBJS=$(addsuffix .os, $(basename $(libc.so_src_files)))
 libc.so_OBJS:=$(addprefix $(OBJ_DIR)/, $(libc.so_OBJS))
 OBJS+=$(libc.so_OBJS)
-X32OBJS+=$(libc.so_OBJS)
 libc.so_LIB=libc.so
 libc.so_LIB:=$(addprefix $(LIB_DIR)/, $(libc.so_LIB))
 SHARED_LIBS+=$(libc.so_LIB)
-X32SHARED_LIBS+=$(libc.so_LIB)
 libc.so_DEPS=$(libdl.so_LIB) $(LIBGCC)
 
 $(libc.so_OBJS): CFLAGS += $(libc_common_cflags)
@@ -709,15 +711,30 @@ libm_common_src_files:= \
 	src/s_isnan.c \
 	src/s_modf.c
 
+ifeq ($(ARCH),x86)
 libm_common_src_files += \
 	i387/fenv.c \
 	i387/s_scalbnl.S \
 	i387/s_scalbn.S \
 	i387/s_scalbnf.S
+endif
+
+ifeq ($(ARCH),x32)
+libm_common_src_files += \
+	amd64/fenv.c \
+	amd64/s_scalbnl.S \
+	amd64/s_scalbn.S \
+	amd64/s_scalbnf.S
+endif
 
 VPATH+=$(BIONIC_LIBM_DIR)
 
+ifeq ($(ARCH),x86)
 libm_common_includes = $(BIONIC_LIBM_DIR)/i386 $(BIONIC_LIBM_DIR)/i387
+endif
+ifeq ($(ARCH),x32)
+libm_common_includes = $(BIONIC_LIBM_DIR)/amd64
+endif
 libm_common_cflags+= $(addprefix -I, $(libm_common_includes))
 
 # libm.a
@@ -829,7 +846,6 @@ endif
 ld.so_OBJS=$(addsuffix .o, $(basename $(LINKER_SRC_FILES)))
 ld.so_OBJS:=$(addprefix $(OBJ_DIR)/, $(ld.so_OBJS))
 OBJS+=$(ld.so_OBJS)
-X32OBJS+=$(ld.so_OBJS)
 ld.so_LIB=ld.so
 ld.so_LIB:=$(addprefix $(LIB_DIR)/, $(ld.so_LIB))
 ld.so_DEPS=\
@@ -846,7 +862,6 @@ LD.SO=$(PWD)/$(ld.so_LIB)
 init-mixed_OBJS=init-mixed.o
 init-mixed_OBJS:=$(addprefix $(OBJ_DIR)/, $(init-mixed_OBJS))
 OBJS+=$(init-mixed_OBJS)
-X32OBJS+=$(init-mixed_OBJS)
 init-mixed.static_OBJS=$(init-mixed_OBJS)
 init-mixed.static_EXE=init-mixed.static
 init-mixed.static_EXE:=$(addprefix $(EXE_DIR)/, $(init-mixed.static_EXE))
@@ -859,7 +874,6 @@ EXES+=$(init-mixed.dynamic_EXE)
 hello_OBJS=hello.o
 hello_OBJS:=$(addprefix $(OBJ_DIR)/, $(hello_OBJS))
 OBJS+=$(hello_OBJS)
-X32OBJS+=$(hello_OBJS)
 hello.static_OBJS=$(hello_OBJS)
 hello.static_EXE=hello.static
 hello.static_EXE:=$(addprefix $(EXE_DIR)/, $(hello.static_EXE))
@@ -872,7 +886,6 @@ EXES+=$(hello.dynamic_EXE)
 test_basic_exceptions_OBJS=test_basic_exceptions.o
 test_basic_exceptions_OBJS:=$(addprefix $(OBJ_DIR)/, $(test_basic_exceptions_OBJS))
 OBJS+=$(test_basic_exceptions_OBJS)
-X32OBJS+=$(test_basic_exceptions_OBJS)
 test_basic_exceptions.static_OBJS=$(test_basic_exceptions_OBJS)
 test_basic_exceptions.static_EXE=test_basic_exceptions.static
 test_basic_exceptions.static_EXE:=$(addprefix $(EXE_DIR)/, $(test_basic_exceptions.static_EXE))
@@ -888,7 +901,6 @@ $(test_basic_exceptions_OBJS): CFLAGS += $(libstdc++_common_cflags)
 libexception-foo.so_OBJS=exception-foo.o
 libexception-foo.so_OBJS:=$(addprefix $(OBJ_DIR)/, $(libexception-foo.so_OBJS))
 OBJS+=$(libexception-foo.so_OBJS)
-X32OBJS+=$(libexception-foo.so_OBJS)
 libexception-foo.so_LIB=libexception-foo.so
 libexception-foo.so_LIB:=$(addprefix $(LIB_DIR)/, $(libexception-foo.so_LIB))
 libexception-foo.so_LIBS = $(DYNAMIC_LIBSTDCXX)
@@ -897,7 +909,6 @@ $(libexception-foo.so_OBJS): CFLAGS += -fexceptions
 exception-main_OBJS=exception-main.o
 exception-main_OBJS:=$(addprefix $(OBJ_DIR)/, $(exception-main_OBJS))
 OBJS+=$(exception-main_OBJS)
-X32OBJS+=$(exception-main_OBJS)
 exception-main.dynamic_OBJS=$(exception-main_OBJS)
 exception-main.dynamic_EXE=exception-main.dynamic
 exception-main.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(exception-main.dynamic_EXE))
@@ -910,7 +921,6 @@ $(exception-main_OBJS): CFLAGS += $(libstdc++_common_cflags)
 pr47383_OBJS=pr47383.o
 pr47383_OBJS:=$(addprefix $(OBJ_DIR)/, $(pr47383_OBJS))
 OBJS+=$(pr47383_OBJS)
-X32OBJS+=$(pr47383_OBJS)
 pr47383.static_OBJS=$(pr47383_OBJS)
 pr47383.static_EXE=pr47383.static
 pr47383.static_EXE:=$(addprefix $(EXE_DIR)/, $(pr47383.static_EXE))
@@ -922,15 +932,9 @@ EXES+=$(pr47383.dynamic_EXE)
 
 VPATH+=test
 
-ifeq (X$(ARCH),x32)
-OBJS=$(X32OBJS)
-SHARED_LIBS=$(X32SHARED_LIBS)
-STATIC_LIBS=$(X32STATIC_LIBS)
-endif
-
 #$(init-mixed_OBJS): CFLAGS+=-O0 -g
 
-all: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB) $(EXES)
+all: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB) $(EXES) .gdbinit
 	export LD_LIBRARY_PATH=$(LIB_DIR); \
 	for f in $(EXES); do \
 	  ./$$f; \
@@ -1099,5 +1103,8 @@ $(EXE_DIR)/exception-main.dynamic: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so
 	-mkdir -p $(@D)
 	$(build-dynamic-c++-executable)
 
+.gdbinit: gdbinit
+	sed -e "s/@ARCH@/$(ARCH)/" $< >$@
+
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) .gdbinit

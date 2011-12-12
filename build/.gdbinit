@@ -1,1 +1,1 @@
-set env LD_LIBRARY_PATH=x86/lib
+set env LD_LIBRARY_PATH=x32/lib
