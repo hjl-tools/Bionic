@@ -17,31 +17,31 @@
 #else
 
 struct statfs {
- long f_type;
- long f_bsize;
- long f_blocks;
- long f_bfree;
- long f_bavail;
- long f_files;
- long f_ffree;
+ long long f_type;
+ long long f_bsize;
+ long long f_blocks;
+ long long f_bfree;
+ long long f_bavail;
+ long long f_files;
+ long long f_ffree;
  __kernel_fsid_t f_fsid;
- long f_namelen;
- long f_frsize;
- long f_spare[5];
+ long long f_namelen;
+ long long f_frsize;
+ long long f_spare[5];
 };
 
 struct statfs64 {
- long f_type;
- long f_bsize;
- long f_blocks;
- long f_bfree;
- long f_bavail;
- long f_files;
- long f_ffree;
+ long long f_type;
+ long long f_bsize;
+ long long f_blocks;
+ long long f_bfree;
+ long long f_bavail;
+ long long f_files;
+ long long f_ffree;
  __kernel_fsid_t f_fsid;
- long f_namelen;
- long f_frsize;
- long f_spare[5];
+ long long f_namelen;
+ long long f_frsize;
+ long long f_spare[5];
 };
 
 struct compat_statfs64 {
