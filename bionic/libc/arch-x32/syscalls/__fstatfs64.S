@@ -2,12 +2,12 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type __sigsuspend, @function
-    .globl __sigsuspend
+    .type __fstatfs64, @function
+    .globl __fstatfs64
     .align 16
 
-__sigsuspend:
-    movl    $__NR_sigsuspend, %eax
+__fstatfs64:
+    movl    $__NR_fstatfs64, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f

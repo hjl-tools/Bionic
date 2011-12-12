@@ -2,12 +2,12 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type sigaction, @function
-    .globl sigaction
+    .type __rt_sigpending, @function
+    .globl __rt_sigpending
     .align 16
 
-sigaction:
-    movl    $__NR_sigaction, %eax
+__rt_sigpending:
+    movl    $__NR_rt_sigpending, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f

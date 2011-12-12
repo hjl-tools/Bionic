@@ -2,13 +2,12 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type waitid, @function
-    .globl waitid
+    .type __rt_sigsuspend, @function
+    .globl __rt_sigsuspend
     .align 16
 
-waitid:
-    mov     %rcx, %r10
-    movl    $__NR_waitid, %eax
+__rt_sigsuspend:
+    movl    $__NR_rt_sigsuspend, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f

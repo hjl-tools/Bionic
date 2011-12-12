@@ -2,12 +2,13 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type __set_thread_area, @function
-    .globl __set_thread_area
+    .type __waitid, @function
+    .globl __waitid
     .align 16
 
-__set_thread_area:
-    movl    $__NR_set_thread_area, %eax
+__waitid:
+    mov     %rcx, %r10
+    movl    $__NR_waitid, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f
