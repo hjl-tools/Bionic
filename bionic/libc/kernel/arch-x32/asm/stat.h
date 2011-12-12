@@ -73,26 +73,26 @@ struct stat64 {
 #else
 
 struct stat {
- unsigned long st_dev;
- unsigned long st_ino;
- unsigned long st_nlink;
+ unsigned long long st_dev;
+ unsigned long long st_ino;
+ unsigned long long st_nlink;
 
  unsigned int st_mode;
  unsigned int st_uid;
  unsigned int st_gid;
  unsigned int __pad0;
- unsigned long st_rdev;
- long st_size;
- long st_blksize;
- long st_blocks;
+ unsigned long long st_rdev;
+ long long st_size;
+ long long st_blksize;
+ long long st_blocks;
 
- unsigned long st_atime;
- unsigned long st_atime_nsec;
- unsigned long st_mtime;
- unsigned long st_mtime_nsec;
- unsigned long st_ctime;
- unsigned long st_ctime_nsec;
- long __unused[3];
+ unsigned long long st_atime;
+ unsigned long long st_atime_nsec;
+ unsigned long long st_mtime;
+ unsigned long long st_mtime_nsec;
+ unsigned long long st_ctime;
+ unsigned long long st_ctime_nsec;
+ long long __unused[3];
 };
 #endif
 
