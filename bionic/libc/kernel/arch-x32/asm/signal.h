@@ -110,6 +110,8 @@ struct sigaction {
  sigset_t sa_mask;
 };
 
+#define sa_sigaction sa_handler
+
 struct k_sigaction {
  struct sigaction sa;
 };
