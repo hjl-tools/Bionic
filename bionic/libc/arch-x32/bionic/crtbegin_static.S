@@ -124,8 +124,57 @@ __PREINIT_ARRAY__:
 	.globl __INIT_ARRAY__
 __INIT_ARRAY__:
 	.long -1
+	.long	frame_dummy
 
 	.section .fini_array, "aw"
 	.globl __FINI_ARRAY__
 __FINI_ARRAY__:
 	.long -1
+	.long	__do_global_dtors_aux
+
+	.section	.eh_frame,"a",@progbits
+	.align 4
+	.type	__EH_FRAME_BEGIN__, @object
+__EH_FRAME_BEGIN__:
+	.text
+	.p2align 4
+	.type	__do_global_dtors_aux, @function
+__do_global_dtors_aux:
+	cmpb	$0, completed.4720(%rip)
+	pushq	%rbp
+	movl	%esp, %ebp
+	jne	.L1
+	movl	$__deregister_frame_info, %eax
+	testl	%eax, %eax
+	je	.L3
+	mov	$__EH_FRAME_BEGIN__, %edi
+	call	__deregister_frame_info
+.L3:
+	movb	$1, completed.4720(%rip)
+.L1:
+	popq	%rbp
+	ret
+	.text
+	.p2align 4
+	.type	frame_dummy, @function
+frame_dummy:
+	pushq	%rbp
+	movl	$__register_frame_info, %eax
+	testl	%eax, %eax
+	movl	%esp, %ebp
+	je	.L5
+	mov	$object.4725, %esi
+	mov	$__EH_FRAME_BEGIN__, %edi
+	call	__register_frame_info
+.L5:
+	popq	%rbp
+	ret
+	.local	completed.4720
+	.comm	completed.4720,1,1
+	.local	object.4725
+	.comm	object.4725,24,16
+	.weak	__register_frame_info
+	.weak	__deregister_frame_info
+
+#include "__dso_handle.S"
+#include "atexit.S"

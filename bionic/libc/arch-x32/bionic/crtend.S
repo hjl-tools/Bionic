@@ -6,3 +6,9 @@
 
 	.section .fini_array, "aw"
 	.long 0
+
+	.section	.eh_frame,"a",@progbits
+	.align 4
+	.type	__FRAME_END__, @object
+__FRAME_END__:
+	.zero	4
