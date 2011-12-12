@@ -713,6 +713,8 @@ verify_elf_object(void *base, const char *name)
     if (hdr->e_machine != EM_ARM) return -1;
 #elif defined(ANDROID_X86_LINKER)
     if (hdr->e_machine != EM_386) return -1;
+#elif defined(ANDROID_X32_LINKER)
+    if (hdr->e_machine != EM_X86_64) return -1;
 #endif
     return 0;
 }
@@ -1495,9 +1497,52 @@ static int reloc_library_a(soinfo *si, Elf32_Rela *rela, unsigned count)
             sym_name = (char *)(strtab + symtab[sym].st_name);
             s = _do_lookup(si, sym_name, &base);
             if(s == 0) {
-                DL_ERR("%5d cannot locate '%s'...", pid, sym_name);
-                return -1;
-            }
+                /* We only allow an undefined symbol if this is a weak
+                   reference..   */
+                s = &symtab[sym];
+                if (ELF32_ST_BIND(s->st_info) != STB_WEAK) {
+                    DL_ERR("%5d cannot locate '%s'...\n", pid, sym_name);
+                    return -1;
+                }
+
+                /* IHI0044C AAELF 4.5.1.1:
+
+                   Libraries are not searched to resolve weak references.
+                   It is not an error for a weak reference to remain
+                   unsatisfied.
+
+                   During linking, the value of an undefined weak reference is:
+                   - Zero if the relocation type is absolute
+                   - The address of the place if the relocation is pc-relative
+                   - The address of nominial base address if the relocation
+                     type is base-relative.
+                  */
+
+                switch (type) {
+#if defined(ANDROID_X32_LINKER)
+                case R_X86_64_JUMP_SLOT:
+                case R_X86_64_GLOB_DAT:
+                case R_X86_64_32:
+                case R_X86_64_RELATIVE:    /* Dont' care. */
+#endif /* ANDROID_*_LINKER */
+                    /* sym_addr was initialized to be zero above or relocation
+                       code below does not care about value of sym_addr.
+                       No need to do anything.  */
+                    break;
+
+#if defined(ANDROID_X32_LINKER)
+                case R_X86_64_PC32:
+                    sym_addr = reloc;
+                    break;
+#endif /* ANDROID_X32_LINKER */
+
+                default:
+                    DL_ERR("%5d unknown weak reloc type %d @ %p (%d)\n",
+                                 pid, type, rela, (int) (rela - start));
+                    return -1;
+                }
+            } else {
+                /* We got a definition.  */
 #if 0
             if((base == 0) && (si->base != 0)){
                     /* linking from libraries to main image is bad */
@@ -1512,7 +1557,8 @@ static int reloc_library_a(soinfo *si, Elf32_Rela *rela, unsigned count)
                       s->st_value);
                 return -1;
             }
-            sym_addr = (unsigned)(s->st_value + base);
+            	sym_addr = (unsigned)(s->st_value + base);
+	    }
             COUNT_RELOC(RELOC_SYMBOL);
         } else {
             s = 0;
