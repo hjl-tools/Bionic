@@ -11,6 +11,9 @@
  ****************************************************************************/
 #ifdef __i386__
 #include "unistd_32.h"
-#else
+#elif defined __LP64__
 #include "unistd_64.h"
+#else
+#include "unistd_x32.h"
+#endif
 #endif
