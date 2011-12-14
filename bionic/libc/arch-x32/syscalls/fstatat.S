@@ -2,11 +2,11 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type __fstatat64, @function
-    .globl __fstatat64
+    .type fstatat, @function
+    .globl fstatat
     .align 16
 
-__fstatat64:
+fstatat:
     mov     %rcx, %r10
     movl    $__NR_fstatat64, %eax
     syscall
