@@ -1,5 +1,11 @@
 2011-12-14  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* test/hello.c: Include <time.h>, <sys/stat.h> and <sys/statfs.h>.
+	(hello): Print out sizes of time_t, off_t, struct stat and
+	struct statfs.
+
+2011-12-14  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (X32OBJS): Removed.
 	(X32SHARED_LIBS): Likewise.
 	(X32STATIC_LIBS): Likewise.
