@@ -69,7 +69,7 @@ int __set_tls(void *ptr)
 {
     int   rc, segment;
 
-     pthread_mutex_lock(&_tls_desc_lock);
+    pthread_mutex_lock(&_tls_desc_lock);
     _tls_desc.base_addr = (unsigned long)ptr;
 
     /* We also need to write the location of the tls to ptr[0] */

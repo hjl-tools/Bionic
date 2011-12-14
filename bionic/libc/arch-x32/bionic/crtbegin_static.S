@@ -50,27 +50,7 @@
 #    - address of the constructor list
 #
 
-/* This is the canonical entry point, usually the first thing in the text
-   segment.  The x86-64 psABI says that when the entry
-   point runs, most registers' values are unspecified, except for:
-
-   %rdx		Contains a function pointer to be registered with `atexit'.
-		This is how the dynamic linker arranges to have DT_FINI
-		functions called for shared libraries that have been loaded
-		before this code runs.
-
-   %rsp		The stack contains the arguments and environment:
-		0(%rsp)				argc
-		PTR_SIZE(%rsp)			argv[0]
-		...
-		(PTR_SIZE*argc)(%rsp)		NULL
-		(PTR_SIZE*(argc+1))(%rsp)	envp[0]
-		...
-						NULL
-*/
-
 _start:
-#ifdef __x86_64__
 	/* Extract the arguments as encoded on the stack and set up
 	   the arguments for
 	   
@@ -91,16 +71,6 @@ _start:
 	movl	%esp, %edi		# elfdata
         mov     $0f, %edx		# main
         mov     $1f, %ecx		# structors
-#else
-        mov     %esp, %eax
-        mov     $1f, %edx
-        pushl   %edx
-        mov     $0f, %edx
-        pushl   %edx
-        mov     $0, %edx
-        pushl   %edx
-        pushl   %eax
-#endif
         call     __libc_init
 0:
         jmp   main
@@ -109,12 +79,6 @@ _start:
     .long   __INIT_ARRAY__
     .long   __FINI_ARRAY__
 
-# the .ctors section contains a list of pointers to "constructor"
-# functions that need to be called in order during C library initialization,
-# just before the program is being run. This is a C++ requirement
-#
-# the last entry shall be 0, and is defined in crtend.S
-#
 	.section .preinit_array, "aw"
 	.globl __PREINIT_ARRAY__
 __PREINIT_ARRAY__:
