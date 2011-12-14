@@ -1,5 +1,12 @@
 2011-12-14  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile (INCLUDES): Use i387 for x86 and amd64 for x32.
+	(libc_common_src_files): Remove unistd/lseek64.c and unistd/mmap.c.
+	Support x32.
+	(libm_common_src_files): Support x32.
+
+2011-12-14  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* test/hello.c: Include <time.h>, <sys/stat.h> and <sys/statfs.h>.
 	(hello): Print out sizes of time_t, off_t, struct stat and
 	struct statfs.

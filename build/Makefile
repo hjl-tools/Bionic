@@ -23,9 +23,7 @@ INCLUDES=\
 
 ifeq ($(ARCH),x86)
 INCLUDES+=-I$(BIONIC_LIBM_DIR)/include/i387
-endif
-
-ifeq ($(ARCH),x32)
+else
 INCLUDES+=-I$(BIONIC_LIBM_DIR)/include/amd64
 endif
 
@@ -447,7 +445,11 @@ libc_common_src_files+= \
 	string/strlen.c
 endif
 
-ifeq ($(ARCH),x32)
+ifeq ($(ARCH),x86)
+libc_common_src_files+= \
+	unistd/lseek64.c \
+	unistd/mmap.c
+else
 libc_common_src_files+= \
 	arch-$(ARCH)/bionic/__rt_sigreturn.S \
 	arch-$(ARCH)/bionic/__sigsuspend.c \
@@ -455,10 +457,6 @@ libc_common_src_files+= \
 	arch-$(ARCH)/bionic/sigprocmask.c \
 	arch-$(ARCH)/bionic/lseek.S \
 	arch-$(ARCH)/bionic/mmap.S 
-else
-libc_common_src_files+= \
-	unistd/lseek64.c \
-	unistd/mmap.c
 endif
 
 # this is needed for static versions of libc
@@ -717,9 +715,7 @@ libm_common_src_files += \
 	i387/s_scalbnl.S \
 	i387/s_scalbn.S \
 	i387/s_scalbnf.S
-endif
-
-ifeq ($(ARCH),x32)
+else
 libm_common_src_files += \
 	amd64/fenv.c \
 	amd64/s_scalbnl.S \
@@ -731,8 +727,7 @@ VPATH+=$(BIONIC_LIBM_DIR)
 
 ifeq ($(ARCH),x86)
 libm_common_includes = $(BIONIC_LIBM_DIR)/i386 $(BIONIC_LIBM_DIR)/i387
-endif
-ifeq ($(ARCH),x32)
+else
 libm_common_includes = $(BIONIC_LIBM_DIR)/amd64
 endif
 libm_common_cflags+= $(addprefix -I, $(libm_common_includes))
