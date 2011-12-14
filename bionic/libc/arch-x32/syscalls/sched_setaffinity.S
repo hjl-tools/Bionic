@@ -2,13 +2,13 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type __pread64, @function
-    .globl __pread64
+    .type sched_setaffinity, @function
+    .globl sched_setaffinity
     .align 16
 
-__pread64:
+sched_setaffinity:
     mov     %rcx, %r10
-    movl    $__NR_pread64, %eax
+    movl    $__NR_sched_setaffinity, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f

@@ -2,13 +2,13 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type __sched_getaffinity, @function
-    .globl __sched_getaffinity
+    .type utimensat, @function
+    .globl utimensat
     .align 16
 
-__sched_getaffinity:
+utimensat:
     mov     %rcx, %r10
-    movl    $__NR_sched_getaffinity, %eax
+    movl    $__NR_utimensat, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f

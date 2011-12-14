@@ -2,13 +2,12 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type __sched_getaffinity, @function
-    .globl __sched_getaffinity
+    .type fdatasync, @function
+    .globl fdatasync
     .align 16
 
-__sched_getaffinity:
-    mov     %rcx, %r10
-    movl    $__NR_sched_getaffinity, %eax
+fdatasync:
+    movl    $__NR_fdatasync, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f

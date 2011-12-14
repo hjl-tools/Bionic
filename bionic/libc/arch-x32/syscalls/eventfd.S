@@ -2,13 +2,12 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type __pwrite64, @function
-    .globl __pwrite64
+    .type eventfd, @function
+    .globl eventfd
     .align 16
 
-__pwrite64:
-    mov     %rcx, %r10
-    movl    $__NR_pwrite64, %eax
+eventfd:
+    movl    $__NR_eventfd, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f
