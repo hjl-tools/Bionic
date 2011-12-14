@@ -59,7 +59,6 @@ syscall_src += arch-x32/syscalls/mincore.S
 syscall_src += arch-x32/syscalls/__ioctl.S
 syscall_src += arch-x32/syscalls/readv.S
 syscall_src += arch-x32/syscalls/writev.S
-syscall_src += arch-x32/syscalls/__fcntl.S
 syscall_src += arch-x32/syscalls/flock.S
 syscall_src += arch-x32/syscalls/fchmod.S
 syscall_src += arch-x32/syscalls/dup.S
