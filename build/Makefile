@@ -413,6 +413,7 @@ libc_common_src_files += \
 	arch-$(ARCH)/bionic/_exit_with_stack_teardown.S \
 	arch-$(ARCH)/bionic/setjmp.S \
 	arch-$(ARCH)/bionic/_setjmp.S \
+	arch-$(ARCH)/bionic/sigsetjmp.S \
 	arch-$(ARCH)/bionic/vfork.S \
 	arch-$(ARCH)/bionic/syscall.S \
 	string/strcpy.c \

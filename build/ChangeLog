@@ -1,5 +1,9 @@
 2011-12-14  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile (libc_common_src_files): Add sigsetjmp.S.
+
+2011-12-14  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (INCLUDES): Use i387 for x86 and amd64 for x32.
 	(libc_common_src_files): Remove unistd/lseek64.c and unistd/mmap.c.
 	Support x32.
