@@ -1,3 +1,9 @@
+2011-12-14  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile (X32OBJS): Removed.
+	(X32SHARED_LIBS): Likewise.
+	(X32STATIC_LIBS): Likewise.
+
 2011-12-08  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* Makefile ($(libexception-foo.so_LIB)): Depend on $(libc.so_LIB)
