@@ -287,7 +287,7 @@ char *          tzname[2] = {
 static struct tm    tmGlobal;
 
 #ifdef USG_COMPAT
-extern long int timezone = 0;
+long int timezone = 0;
 int         daylight = 0;
 #endif /* defined USG_COMPAT */
 
