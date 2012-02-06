@@ -28,33 +28,7 @@
 #include <pthread.h>
 #include <asm/prctl.h>
 
-struct user_desc {
-    unsigned long   base_addr;
-    unsigned int    limit;
-    unsigned int    seg_32bit:1;
-    unsigned int    contents:2;
-    unsigned int    read_exec_only:1;
-    unsigned int    limit_in_pages:1;
-    unsigned int    seg_not_present:1;
-    unsigned int    useable:1;
-    unsigned int    empty:25;
-};
-
-/* the following can't be const, since the first call will
- * update the 'entry_number' field
- */
-static struct user_desc  _tls_desc =
-{
-    0,
-    0x1000,
-    1,
-    0,
-    0,
-    1,
-    0,
-    1,
-    0
-};
+static unsigned long _tls_desc;
 
 static pthread_mutex_t  _tls_desc_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -70,7 +44,7 @@ int __set_tls(void *ptr)
     int   rc, segment;
 
     pthread_mutex_lock(&_tls_desc_lock);
-    _tls_desc.base_addr = (unsigned long)ptr;
+    _tls_desc = (unsigned long)ptr;
 
     /* We also need to write the location of the tls to ptr[0] */
     ((struct _thread_area_head *)ptr)->self = ptr;
