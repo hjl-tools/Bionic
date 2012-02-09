@@ -92,7 +92,7 @@ struct stat {
  unsigned long long st_mtime_nsec;
  unsigned long long st_ctime;
  unsigned long long st_ctime_nsec;
- long long __unused[3];
+ long long __unused1[3];
 };
 #endif
 
