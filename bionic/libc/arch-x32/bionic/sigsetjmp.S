@@ -34,19 +34,27 @@
 #include <machine/asm.h>
 
 ENTRY(sigsetjmp)
+	/* Store signal mask save */
+	movl	%esi,68(%rdi)
 	testl	%esi, %esi
 	jz	1f
 
+	/* Save RDI */
+	pushq	%rdi
 	movl	$0, %edi
 #ifdef PIC
 	call	PIC_PLT(_C_LABEL(sigblock))
 #else
 	call	_C_LABEL(sigblock)
 #endif
+	/* Restor RDI */
+	popq	%rdi
 
+	/* Store signal mask */
 	movl	%eax,64(%rdi)
 1:
-	movq	0(%esp),%rdx
+	/* Get return address */
+	movq	0(%rsp),%rdx
 	movq	%rdx, 0(%rdi)
 	movq	%rbx, 8(%rdi)
 	movq	%rsp,16(%rdi)
@@ -59,19 +67,29 @@ ENTRY(sigsetjmp)
 	ret
 
 ENTRY(siglongjmp)
-	cmpl	$0,64(%rdi)
+	/* Check if signal mask is saved */
+	cmpl	$0,68(%rdi)
 	jz	1f
 
+	/* Save RDI */
 	pushq	%rdi
+	/* Save RSI */
+	pushq	%rsi
+	/* Get the stored signal mask */
 	movl	64(%rdi), %edi
 #ifdef PIC
 	call	PIC_PLT(_C_LABEL(sigsetmask))
 #else
 	call	_C_LABEL(sigsetmask)
 #endif
+	/* Restor RSI */
+	popq	%rsi
+	/* Restor RDI */
 	popq	%rdi
 
+	/* Load the return value */
 1:	movl	%esi,%eax
+	/* Get PC */
 	movq	0(%rdi),%rdx
 	movq	8(%rdi),%rbx
 	movq	16(%rdi),%rsp
@@ -83,5 +101,5 @@ ENTRY(siglongjmp)
 	testl	%eax,%eax
 	jnz	2f
 	incl	%eax
-2:	movq	%rdx,0(%rsp)
+2:	movq	%rdx,0(%rsp)	/* Update return address */
 	ret

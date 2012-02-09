@@ -5,4 +5,5 @@
  * machine/setjmp.h: machine dependent setjmp-related information.
  */
 
-#define	_JBLEN	9		/* size, in longs, of a jmp_buf */
+/* 8 64bit registers + 32bit signal mask + 32bit signal mask save.  */
+#define	_JBLEN	9		/* size, in long longs, of a jmp_buf */

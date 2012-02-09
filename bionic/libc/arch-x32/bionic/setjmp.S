@@ -44,14 +44,19 @@
  */
 
 ENTRY(setjmp)
+	/* Save RDI */
+	pushq	%rdi
 	movl	$0, %edi
 #ifdef PIC
 	call	PIC_PLT(_C_LABEL(sigblock))
 #else
 	call	_C_LABEL(sigblock)
 #endif
+	/* Restor RDI */
+	popq	%rdi
 
-	movq	0(%esp),%rdx
+	/* Get return address */
+	movq	0(%rsp),%rdx
 	movq	%rdx, 0(%rdi)
 	movq	%rbx, 8(%rdi)
 	movq	%rsp,16(%rdi)
@@ -60,21 +65,31 @@ ENTRY(setjmp)
 	movq	%r13,40(%rdi)
 	movq	%r14,48(%rdi)
 	movq	%r15,56(%rdi)
+	/* Store signal mask */
 	movl	%eax,64(%rdi)
 	xorl	%eax,%eax
 	ret
 
 ENTRY(longjmp)
+	/* Save RDI */
 	pushq	%rdi
+	/* Save RSI */
+	pushq	%rsi
+	/* Get the stored signal mask */
 	movl	64(%rdi), %edi
 #ifdef PIC
 	call	PIC_PLT(_C_LABEL(sigsetmask))
 #else
 	call	_C_LABEL(sigsetmask)
 #endif
+	/* Restor RSI */
+	popq	%rsi
+	/* Restor RDI */
 	popq	%rdi
 
+	/* Load the return value */
 	movl	%esi,%eax
+	/* Get PC */
 	movq	0(%rdi),%rdx
 	movq	8(%rdi),%rbx
 	movq	16(%rdi),%rsp
@@ -86,5 +101,5 @@ ENTRY(longjmp)
 	testl	%eax,%eax
 	jnz	1f
 	incl	%eax
-1:	movq	%rdx,0(%rsp)
+1:	movq	%rdx,0(%rsp)	/* Update return address */
 	ret

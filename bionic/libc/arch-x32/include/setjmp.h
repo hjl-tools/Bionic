@@ -1,10 +1,14 @@
-/* $OpenBSD: _setjmp.S,v 1.5 2005/08/07 11:30:38 espie Exp $ */
+/*	$OpenBSD: setjmp.h,v 1.5 2005/12/13 00:35:22 millert Exp $	*/
+/*	$NetBSD: setjmp.h,v 1.11 1994/12/20 10:35:44 cgd Exp $	*/
+
 /*-
- * Copyright (c) 1990 The Regents of the University of California.
- * All rights reserved.
- *
- * This code is derived from software contributed to Berkeley by
- * William Jolitz.
+ * Copyright (c) 1990, 1993
+ *	The Regents of the University of California.  All rights reserved.
+ * (c) UNIX System Laboratories, Inc.
+ * All or some portions of this file are derived from material licensed
+ * to the University of California by American Telephone and Telegraph
+ * Co. or Unix System Laboratories, Inc. and are reproduced herein with
+ * the permission of UNIX System Laboratories, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,48 +33,31 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- */
-
-#include <machine/asm.h>
-
-/*
- * C library -- _setjmp, _longjmp
  *
- *	_longjmp(a,v)
- * will generate a "return(v)" from the last call to
- *	_setjmp(a)
- * by restoring registers from the stack.
- * The previous signal state is NOT restored.
+ *	@(#)setjmp.h	8.2 (Berkeley) 1/21/94
  */
 
-ENTRY(_setjmp)
-	/* Get return address */
-	movq	0(%rsp),%rdx
-	movq	%rdx, 0(%rdi)
-	movq	%rbx, 8(%rdi)
-	movq	%rsp,16(%rdi)
-	movq	%rbp,24(%rdi)
-	movq	%r12,32(%rdi)
-	movq	%r13,40(%rdi)
-	movq	%r14,48(%rdi)
-	movq	%r15,56(%rdi)
-	xorl	%eax,%eax
-	ret
+#ifndef _SETJMP_H_
+#define _SETJMP_H_
 
-ENTRY(_longjmp)
-	/* Load the return value */
-	movl	%esi,%eax
-	/* Get PC */
-	movq	0(%rdi),%rdx
-	movq	8(%rdi),%rbx
-	movq	16(%rdi),%rsp
-	movq	24(%rdi),%rbp
-	movq	32(%rdi),%r12
-	movq	40(%rdi),%r13
-	movq	48(%rdi),%r14
-	movq	56(%rdi),%r15
-	testl	%eax,%eax
-	jnz	1f
-	incl	%eax
-1:	movq	%rdx,0(%rsp)	/* Update return address */
-	ret
+#include <sys/cdefs.h>
+#include <machine/setjmp.h>
+
+typedef long long sigjmp_buf[_JBLEN];
+typedef long long jmp_buf[_JBLEN];
+
+__BEGIN_DECLS
+
+int     _setjmp(jmp_buf);
+void    _longjmp(jmp_buf, int);
+void    longjmperror(void);
+
+int     setjmp(jmp_buf);
+void    longjmp(jmp_buf, int);
+
+int     sigsetjmp(sigjmp_buf, int);
+void    siglongjmp(sigjmp_buf, int);
+
+__END_DECLS
+
+#endif /* !_SETJMP_H_ */
