@@ -36,6 +36,8 @@ struct _thread_area_head {
     void *self;
 };
 
+extern int __arch_prctl(int, unsigned long *);
+
 /* we implement thread local storage through the fs: segment descriptor
  * we create a segment descriptor for the tls
  */
