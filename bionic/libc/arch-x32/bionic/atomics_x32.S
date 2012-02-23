@@ -49,6 +49,7 @@ __futex_syscall3:
 .type __futex_syscall4, @function
 .align 16
 __futex_syscall4:
+    mov     %ecx, %r10d
     movl    $__NR_futex, %eax
     syscall
     ret
