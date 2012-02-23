@@ -9,8 +9,8 @@
  ***
  ****************************************************************************
  ****************************************************************************/
-#ifndef _ASM_X86_SIGNAL_H
-#define _ASM_X86_SIGNAL_H
+#ifndef _ASM_X32_SIGNAL_H
+#define _ASM_X32_SIGNAL_H
 
 #ifndef __ASSEMBLY__
 #include <linux/types.h>
@@ -20,7 +20,13 @@
 struct siginfo;
 
 #define NSIG 32
+#ifdef __i386__
 typedef unsigned long sigset_t;
+#else
+/* sigset_t must match compat_sigset_t in kernel, which is 8 byte aligned
+ * to 4 byte.  */
+typedef unsigned long long sigset_t __attribute__ ((aligned(4)));
+#endif
 
 #endif
 
