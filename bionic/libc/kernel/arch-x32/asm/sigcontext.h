@@ -9,8 +9,8 @@
  ***
  ****************************************************************************
  ****************************************************************************/
-#ifndef _ASM_X86_SIGCONTEXT_H
-#define _ASM_X86_SIGCONTEXT_H
+#ifndef _ASM_X32_SIGCONTEXT_H
+#define _ASM_X32_SIGCONTEXT_H
 
 #include <linux/compiler.h>
 #include <asm/types.h>
@@ -98,33 +98,36 @@ struct _fpstate {
 
 struct sigcontext {
  unsigned long r8;
- unsigned long r9;
- unsigned long r10;
- unsigned long r11;
- unsigned long r12;
- unsigned long r13;
- unsigned long r14;
- unsigned long r15;
- unsigned long rdi;
- unsigned long rsi;
- unsigned long rbp;
- unsigned long rbx;
- unsigned long rdx;
- unsigned long rax;
- unsigned long rcx;
- unsigned long rsp;
- unsigned long rip;
- unsigned long eflags;
+ unsigned long long r9;
+ unsigned long long r10;
+ unsigned long long r11;
+ unsigned long long r12;
+ unsigned long long r13;
+ unsigned long long r14;
+ unsigned long long r15;
+ unsigned long long rdi;
+ unsigned long long rsi;
+ unsigned long long rbp;
+ unsigned long long rbx;
+ unsigned long long rdx;
+ unsigned long long rax;
+ unsigned long long rcx;
+ unsigned long long rsp;
+ unsigned long long rip;
+ unsigned long long eflags;
  unsigned short cs;
  unsigned short gs;
  unsigned short fs;
  unsigned short __pad0;
- unsigned long err;
- unsigned long trapno;
- unsigned long oldmask;
- unsigned long cr2;
+ unsigned long long err;
+ unsigned long long trapno;
+ unsigned long long oldmask;
+ unsigned long long cr2;
  struct _fpstate __user *fpstate;
- unsigned long reserved1[8];
+#ifndef __LP64__
+ unsigned int __fpstate_pad;
+#endif
+ unsigned long long reserved1[8];
 };
 
 #endif
