@@ -145,7 +145,6 @@ libc_common_src_files := \
 	unistd/signal.c \
 	unistd/signame.c \
 	unistd/sigsetmask.c \
-	unistd/sigsuspend.c \
 	unistd/sigwait.c \
 	unistd/sleep.c \
 	unistd/statfs.c \
@@ -448,12 +447,13 @@ endif
 
 ifeq ($(ARCH),x86)
 libc_common_src_files+= \
+	unistd/sigsuspend.c \
 	unistd/lseek64.c \
 	unistd/mmap.c
 else
 libc_common_src_files+= \
 	arch-$(ARCH)/bionic/__rt_sigreturn.S \
-	arch-$(ARCH)/bionic/__sigsuspend.c \
+	arch-$(ARCH)/bionic/sigsuspend.c \
 	arch-$(ARCH)/bionic/sigaction.c \
 	arch-$(ARCH)/bionic/sigprocmask.c \
 	arch-$(ARCH)/bionic/lseek.S \
