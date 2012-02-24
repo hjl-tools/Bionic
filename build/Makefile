@@ -926,6 +926,18 @@ pr47383.dynamic_EXE=pr47383.dynamic
 pr47383.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(pr47383.dynamic_EXE))
 EXES+=$(pr47383.dynamic_EXE)
 
+pthread1_OBJS=pthread1.o
+pthread1_OBJS:=$(addprefix $(OBJ_DIR)/, $(pthread1_OBJS))
+OBJS+=$(pthread1_OBJS)
+pthread1.static_OBJS=$(pthread1_OBJS)
+pthread1.static_EXE=pthread1.static
+pthread1.static_EXE:=$(addprefix $(EXE_DIR)/, $(pthread1.static_EXE))
+EXES+=$(pthread1.static_EXE)
+pthread1.dynamic_OBJS=$(pthread1_OBJS)
+pthread1.dynamic_EXE=pthread1.dynamic
+pthread1.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(pthread1.dynamic_EXE))
+EXES+=$(pthread1.dynamic_EXE)
+
 VPATH+=test
 
 #$(init-mixed_OBJS): CFLAGS+=-O0 -g
