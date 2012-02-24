@@ -3,20 +3,21 @@
 .text
 
 /*
- * int  __pthread_clone(int (*fn)(void*), void *tls, int flags,
+ * int  __pthread_clone(int (*fn)(void*), void **tls, int flags,
  *                      void *arg);
  */
 .globl __pthread_clone
 .type __pthread_clone, @function
 .align 16
 __pthread_clone:
-        # insert arguments onto the child stack
-	sub	$24, %esi
-	movq 	%rsi, 16(%rsi)		/* tls */
-	movq 	%rcx, 8(%rsi)		/* arg */
-	movq 	%rdi, (%rsi)		/* fn */
+        # insert arguments onto the child stack and keep stack 16byte
+	# aligned.
+	movq 	%rsi, -16(%rsi)		/* tls */
+	movq 	%rcx, -24(%rsi)		/* arg */
+	movq 	%rdi, -32(%rsi)		/* fn */
 
-        movl    %edx, %edi
+	sub	$32, %esi		/* new stack */
+        movl    %edx, %edi		/* flags */
         movl    $__NR_clone, %eax
 	syscall
         test    %eax, %eax
