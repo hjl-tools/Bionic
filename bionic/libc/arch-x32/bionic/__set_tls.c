@@ -28,8 +28,6 @@
 #include <pthread.h>
 #include <asm/prctl.h>
 
-static unsigned long _tls_desc;
-
 static pthread_mutex_t  _tls_desc_lock = PTHREAD_MUTEX_INITIALIZER;
 
 struct _thread_area_head {
@@ -46,12 +44,11 @@ int __set_tls(void *ptr)
     int   rc, segment;
 
     pthread_mutex_lock(&_tls_desc_lock);
-    _tls_desc = (unsigned long)ptr;
 
     /* We also need to write the location of the tls to ptr[0] */
     ((struct _thread_area_head *)ptr)->self = ptr;
 
-    rc = __arch_prctl (ARCH_SET_FS, &_tls_desc );
+    rc = __arch_prctl (ARCH_SET_FS, ptr);
     if (rc != 0)
     {
         /* could not set thread local area */
