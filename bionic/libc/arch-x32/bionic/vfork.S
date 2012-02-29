@@ -17,7 +17,7 @@
 
 vfork:
     /* grab the return address */
-    popq    %rcx
+    popq    %rdi
     movl    $__NR_vfork, %eax
     syscall
     cmpl    $-4095, %eax
@@ -27,4 +27,4 @@ vfork:
     call    __set_errno
     orl     $-1, %eax
 1:
-    jmp     *%rcx
+    jmp     *%rdi
