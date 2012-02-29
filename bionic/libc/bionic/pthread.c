@@ -133,7 +133,8 @@ _pthread_internal_free( pthread_internal_t*  thread )
 static void
 _pthread_internal_remove_locked( pthread_internal_t*  thread )
 {
-    thread->next->pref = thread->pref;
+    if (thread->next)
+	thread->next->pref = thread->pref;
     thread->pref[0]    = thread->next;
 }
 
