@@ -102,7 +102,6 @@ libc_common_src_files := \
 	unistd/exec.c \
 	unistd/fcntl.c \
 	unistd/fnmatch.c \
-	unistd/fstatfs.c \
 	unistd/ftime.c \
 	unistd/ftok.c \
 	unistd/getcwd.c \
@@ -147,7 +146,6 @@ libc_common_src_files := \
 	unistd/sigsetmask.c \
 	unistd/sigwait.c \
 	unistd/sleep.c \
-	unistd/statfs.c \
 	unistd/strsignal.c \
 	unistd/syslog.c \
 	unistd/system.c \

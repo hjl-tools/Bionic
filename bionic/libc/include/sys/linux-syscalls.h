@@ -32,8 +32,6 @@
 #define __NR_getgroups32 __NR_getgroups
 #define __NR_setgroups32 __NR_setgroups
 #define	__NR_fstatat64 __NR_newfstatat
-#define __NR_fstatfs64 __NR_fstatfs
-#define __NR_statfs64 __NR_statfs
 #define	__NR_fstat64 __NR_fstat
 #define	__NR_fstat64 __NR_fstat
 #define	__NR_stat64 __NR_stat

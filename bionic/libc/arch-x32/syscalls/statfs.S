@@ -2,12 +2,12 @@
 #include <sys/linux-syscalls.h>
 
     .text
-    .type __fstatfs64, @function
-    .globl __fstatfs64
+    .type statfs, @function
+    .globl statfs
     .align 16
 
-__fstatfs64:
-    movl    $__NR_fstatfs64, %eax
+statfs:
+    movl    $__NR_statfs, %eax
     syscall
     cmp     $-4095, %eax
     jb      1f
