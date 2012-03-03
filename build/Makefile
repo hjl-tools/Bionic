@@ -34,6 +34,7 @@ ifeq ($(ARCH),x86)
 CFLAGS=-m32 -march=atom -mbionic
 else
 CFLAGS=-mx32
+CPP_FLAGS+=-DMALLOC_ALIGNMENT=16
 endif
 CFLAGS+=-fPIC -fno-exceptions $(INCLUDES) $(CPP_FLAGS)
 LIBGCC=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
@@ -935,6 +936,18 @@ pthread1.dynamic_OBJS=$(pthread1_OBJS)
 pthread1.dynamic_EXE=pthread1.dynamic
 pthread1.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(pthread1.dynamic_EXE))
 EXES+=$(pthread1.dynamic_EXE)
+
+malloc1_OBJS=malloc1.o
+malloc1_OBJS:=$(addprefix $(OBJ_DIR)/, $(malloc1_OBJS))
+OBJS+=$(malloc1_OBJS)
+malloc1.static_OBJS=$(malloc1_OBJS)
+malloc1.static_EXE=malloc1.static
+malloc1.static_EXE:=$(addprefix $(EXE_DIR)/, $(malloc1.static_EXE))
+EXES+=$(malloc1.static_EXE)
+malloc1.dynamic_OBJS=$(malloc1_OBJS)
+malloc1.dynamic_EXE=malloc1.dynamic
+malloc1.dynamic_EXE:=$(addprefix $(EXE_DIR)/, $(malloc1.dynamic_EXE))
+EXES+=$(malloc1.dynamic_EXE)
 
 VPATH+=test
 

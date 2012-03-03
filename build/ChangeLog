@@ -1,3 +1,9 @@
+2012-03-02  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* test/malloc1.c: New.
+
+	* Makefile: Build and run test/malloc1.c.
+
 2012-02-23  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* test/pthread1.c: New.
