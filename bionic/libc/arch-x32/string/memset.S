@@ -1,55 +1,33 @@
-/*	$OpenBSD: memset.S,v 1.3 2005/08/07 11:30:38 espie Exp $ */
 /*
- * Written by J.T. Conklin <jtc@netbsd.org>.
- * Public domain.
- */
+Copyright (c) 2012, Intel Corporation
+All rights reserved.
 
-#include <machine/asm.h>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
 
-ENTRY(memset)
-	pushl	%edi
-	pushl	%ebx
-	movl	12(%esp),%edi
-	movzbl	16(%esp),%eax		/* unsigned char, zero extend */
-	movl	20(%esp),%ecx
-	pushl	%edi			/* push address of buffer */
+    * Redistributions of source code must retain the above copyright notice,
+    * this list of conditions and the following disclaimer.
 
-	cld				/* set fill direction forward */
+    * Redistributions in binary form must reproduce the above copyright notice,
+    * this list of conditions and the following disclaimer in the documentation
+    * and/or other materials provided with the distribution.
 
-	/*
-	 * if the string is too short, it's really not worth the overhead
-	 * of aligning to word boundries, etc.  So we jump to a plain
-	 * unaligned set.
-	 */
-	cmpl	$0x0f,%ecx
-	jle	L1
+    * Neither the name of Intel Corporation nor the names of its contributors
+    * may be used to endorse or promote products derived from this software
+    * without specific prior written permission.
 
-	movb	%al,%ah			/* copy char to all bytes in word */
-	movl	%eax,%edx
-	sall	$16,%eax
-	orl	%edx,%eax
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
 
-	movl	%edi,%edx		/* compute misalignment */
-	negl	%edx
-	andl	$3,%edx
-	movl	%ecx,%ebx
-	subl	%edx,%ebx
-
-	movl	%edx,%ecx		/* set until word aligned */
-	rep
-	stosb
-
-	movl	%ebx,%ecx
-	shrl	$2,%ecx			/* set by words */
-	rep
-	stosl
-
-	movl	%ebx,%ecx		/* set remainder by bytes */
-	andl	$3,%ecx
-L1:	rep
-	stosb
-
-	popl	%eax			/* pop address of buffer */
-	popl	%ebx
-	popl	%edi
-	ret
+#include "cache_wrapper.S"
+#define sse2_memset6 memset
+#include "sse2-memset6.S"

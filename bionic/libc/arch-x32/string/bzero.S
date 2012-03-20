@@ -1,43 +1,34 @@
-/*	$OpenBSD: bzero.S,v 1.3 2005/08/07 11:30:38 espie Exp $ */
 /*
- * Written by J.T. Conklin <jtc@netbsd.org>.
- * Public domain.
- */
+Copyright (c) 2012, Intel Corporation
+All rights reserved.
 
-#include <machine/asm.h>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
 
-ENTRY(bzero)
-	pushl	%edi
-	movl	8(%esp),%edi
-	movl	12(%esp),%edx
+    * Redistributions of source code must retain the above copyright notice,
+    * this list of conditions and the following disclaimer.
 
-	cld				/* set fill direction forward */
-	xorl	%eax,%eax		/* set fill data to 0 */
+    * Redistributions in binary form must reproduce the above copyright notice,
+    * this list of conditions and the following disclaimer in the documentation
+    * and/or other materials provided with the distribution.
 
-	/*
-	 * if the string is too short, it's really not worth the overhead
-	 * of aligning to word boundries, etc.  So we jump to a plain
-	 * unaligned set.
-	 */
-	cmpl	$16,%edx
-	jb	L1
+    * Neither the name of Intel Corporation nor the names of its contributors
+    * may be used to endorse or promote products derived from this software
+    * without specific prior written permission.
 
-	movl	%edi,%ecx		/* compute misalignment */
-	negl	%ecx
-	andl	$3,%ecx
-	subl	%ecx,%edx
-	rep				/* zero until word aligned */
-	stosb
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
 
-	movl	%edx,%ecx		/* zero by words */
-	shrl	$2,%ecx
-	andl	$3,%edx
-	rep
-	stosl
-
-L1:	movl	%edx,%ecx		/* zero remainder by bytes */
-	rep
-	stosb
-
-	popl	%edi
-	ret
+#include "cache_wrapper.S"
+#define USE_AS_BZERO
+#define sse2_memset6 bzero
+#include "sse2-memset6.S"
