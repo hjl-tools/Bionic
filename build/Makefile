@@ -434,11 +434,12 @@ libc_common_src_files+= \
 	arch-$(ARCH)/string/strlen_wrapper.S
 else
 libc_common_src_files+= \
+	arch-$(ARCH)/string/bzero.S \
+	arch-$(ARCH)/string/memset.S \
 	string/bcopy.c \
 	string/memcpy.c \
 	string/memmove.c \
 	string/memcmp.c \
-	string/memset.c \
 	string/strcmp.c \
 	string/strncmp.c \
 	string/strlen.c
