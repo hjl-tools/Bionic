@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2010, Intel Corporation
+Copyright (c) 2012, Intel Corporation
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -31,10 +31,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #if defined(USE_SSSE3)
 
 # include "cache_wrapper.S"
-# undef __i686
 # define MEMCPY memmove
 # define USE_AS_MEMMOVE
-# include "ssse3-memcpy5.S"
+# include "ssse3-memcpy-64-atom.S"
+
+	.globl memcpy
+	.type memcpy, @function
+	memcpy = memmove
+
+	.section .text.ssse3,"ax",@progbits
+	.type __memmove_local, @function
+	__memmove_local = memmove
+ENTRY (bcopy)
+	xchg	%rdi, %rsi
+	jmp	__memmove_local
+END (bcopy)
 
 #else
 
