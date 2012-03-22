@@ -1,5 +1,10 @@
 2012-03-22  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* test/malloc1.c (ALIGN): New.
+	(test): Use it.
+
+2012-03-22  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (libc_common_src_files): Use unistd/fstatfs.c and
 	unistd/statfs.c for x86.
 
