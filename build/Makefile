@@ -421,8 +421,10 @@ libc_common_src_files += \
 	bionic/pthread-timers.c \
 	bionic/ptrace.c
 
-ifeq (X$(ARCH),x86)
+ifeq ($(ARCH),x86)
 libc_common_src_files+= \
+	unistd/fstatfs.c \
+	unistd/statfs.c \
 	arch-$(ARCH)/string/bcopy_wrapper.S \
 	arch-$(ARCH)/string/memcpy_wrapper.S \
 	arch-$(ARCH)/string/memmove_wrapper.S \
