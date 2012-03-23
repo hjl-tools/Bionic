@@ -71,6 +71,8 @@ _start:
 	movl	%esp, %edi		# elfdata
         mov     $0f, %edx		# main
         mov     $1f, %ecx		# structors
+	/* Align the stack to a 16 byte boundary */
+	andl	$~15, %esp
         call     __libc_init
 0:
         jmp   main

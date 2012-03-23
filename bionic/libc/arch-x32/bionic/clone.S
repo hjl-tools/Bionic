@@ -12,11 +12,13 @@
 __pthread_clone:
         # insert arguments onto the child stack and keep stack 16byte
 	# aligned.
-	movq 	%rsi, -16(%rsi)		/* tls */
-	movq 	%rcx, -24(%rsi)		/* arg */
-	movq 	%rdi, -32(%rsi)		/* fn */
+	movl	%esi, %eax		/* save tls */
+	andl	$~15, %esi		/* align stack to 16byte */
+	movl 	%eax, -8(%rsi)		/* tls */
+	movl 	%ecx, -12(%rsi)		/* arg */
+	movl 	%edi, -16(%rsi)		/* fn */
 
-	sub	$32, %esi		/* new stack */
+	sub	$16, %esi		/* new stack */
         movl    %edx, %edi		/* flags */
         movl    $__NR_clone, %eax
 	syscall
@@ -34,12 +36,13 @@ __pthread_clone:
         jnz     2f
 
         # we're in the child thread now, call __thread_entry
-        # with the appropriate arguments on the child stack
-        # we already placed most of them
-	popq	%rdi
-	popq	%rsi
-	popq	%rdx
-        jmp     __thread_entry
+        # with the appropriate arguments in registers.
+	movl	(%rsp), %edi		/* fn */
+	movl	4(%rsp), %esi		/* arg */
+	movl	8(%rsp), %edx		/* tls */
+	# keep stack 16byte aligned
+	leal	16(%rsp), %esp
+        call    __thread_entry
         hlt
 
 2:
