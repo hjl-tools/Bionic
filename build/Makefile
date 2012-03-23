@@ -279,7 +279,6 @@ libc_common_src_files := \
 	string/strndup.c \
 	string/strnlen.c \
 	string/strpbrk.c \
-	string/strrchr.c \
 	string/strsep.c \
 	string/strspn.c \
 	string/strstr.c \
@@ -424,6 +423,7 @@ libc_common_src_files+= \
 	unistd/fstatfs.c \
 	unistd/statfs.c \
 	string/strchr.c \
+	string/strrchr.c \
 	string/index.c \
 	arch-$(ARCH)/string/bcopy_wrapper.S \
 	arch-$(ARCH)/string/memcpy_wrapper.S \
@@ -441,6 +441,7 @@ libc_common_src_files+= \
 	arch-$(ARCH)/string/memset.S \
 	arch-$(ARCH)/string/memmove_wrapper.S \
 	arch-$(ARCH)/string/strchr.S \
+	arch-$(ARCH)/string/strrchr.S \
 	string/ffs.c \
 	string/strcmp.c \
 	string/strncmp.c \
