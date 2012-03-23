@@ -259,7 +259,6 @@ libc_common_src_files := \
 	stdlib/tolower_.c \
 	stdlib/toupper_.c \
 	stdlib/wchar.c \
-	string/index.c \
 	string/memccpy.c \
 	string/memchr.c \
 	string/memmem.c \
@@ -268,7 +267,6 @@ libc_common_src_files := \
 	string/strcasecmp.c \
 	string/strcasestr.c \
 	string/strcat.c \
-	string/strchr.c \
 	string/strcoll.c \
 	string/strcspn.c \
 	string/strdup.c \
@@ -425,6 +423,8 @@ ifeq ($(ARCH),x86)
 libc_common_src_files+= \
 	unistd/fstatfs.c \
 	unistd/statfs.c \
+	string/strchr.c \
+	string/index.c \
 	arch-$(ARCH)/string/bcopy_wrapper.S \
 	arch-$(ARCH)/string/memcpy_wrapper.S \
 	arch-$(ARCH)/string/memmove_wrapper.S \
@@ -440,6 +440,7 @@ libc_common_src_files+= \
 	arch-$(ARCH)/string/memcmp_wrapper.S \
 	arch-$(ARCH)/string/memset.S \
 	arch-$(ARCH)/string/memmove_wrapper.S \
+	arch-$(ARCH)/string/strchr.S \
 	string/ffs.c \
 	string/strcmp.c \
 	string/strncmp.c \
