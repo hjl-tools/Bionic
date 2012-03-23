@@ -1,5 +1,9 @@
 2012-03-23  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* .gdbinit: Removed.
+
+2012-03-23  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (libc_common_src_files): Use memmove_wrapper.S for
 	x32.
 
