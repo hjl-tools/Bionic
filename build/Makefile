@@ -438,9 +438,7 @@ else
 libc_common_src_files+= \
 	arch-$(ARCH)/string/bzero.S \
 	arch-$(ARCH)/string/memset.S \
-	string/bcopy.c \
-	string/memcpy.c \
-	string/memmove.c \
+	arch-$(ARCH)/string/memmove_wrapper.S \
 	string/memcmp.c \
 	string/strcmp.c \
 	string/strncmp.c \
