@@ -266,7 +266,6 @@ libc_common_src_files := \
 	string/memswap.c \
 	string/strcasecmp.c \
 	string/strcasestr.c \
-	string/strcat.c \
 	string/strcoll.c \
 	string/strcspn.c \
 	string/strdup.c \
@@ -274,8 +273,6 @@ libc_common_src_files := \
 	string/strerror_r.c \
 	string/strlcat.c \
 	string/strlcpy.c \
-	string/strncat.c \
-	string/strncpy.c \
 	string/strndup.c \
 	string/strpbrk.c \
 	string/strsep.c \
@@ -410,7 +407,6 @@ libc_common_src_files += \
 	arch-$(ARCH)/bionic/sigsetjmp.S \
 	arch-$(ARCH)/bionic/vfork.S \
 	arch-$(ARCH)/bionic/syscall.S \
-	string/strcpy.c \
 	bionic/pthread-atfork.c \
 	bionic/pthread-rwlocks.c \
 	bionic/pthread.c \
@@ -421,7 +417,11 @@ ifeq ($(ARCH),x86)
 libc_common_src_files+= \
 	unistd/fstatfs.c \
 	unistd/statfs.c \
+	string/strcat.c \
+	string/strcpy.c \
 	string/strchr.c \
+	string/strncat.c \
+	string/strncpy.c \
 	string/strnlen.c \
 	string/strrchr.c \
 	string/index.c \
@@ -440,8 +440,12 @@ libc_common_src_files+= \
 	arch-$(ARCH)/string/memcmp_wrapper.S \
 	arch-$(ARCH)/string/memset.S \
 	arch-$(ARCH)/string/memmove_wrapper.S \
+	arch-$(ARCH)/string/strcat_wrapper.S \
+	arch-$(ARCH)/string/strcpy_wrapper.S \
 	arch-$(ARCH)/string/strchr.S \
 	arch-$(ARCH)/string/strlen.S \
+	arch-$(ARCH)/string/strncat_wrapper.S \
+	arch-$(ARCH)/string/strncpy_wrapper.S \
 	arch-$(ARCH)/string/strnlen.S \
 	arch-$(ARCH)/string/strrchr.S \
 	string/ffs.c \

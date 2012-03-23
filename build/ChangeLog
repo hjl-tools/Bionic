@@ -1,5 +1,11 @@
 2012-03-23  H.J. Lu  <hongjiu.lu@intel.com>
 
+	* Makefile (libc_common_src_files): Use strcat_wrapper.S,
+	strcpy_wrapper.S, strncat_wrapper.S and strncpy_wrapper.S for
+	x32.
+
+2012-03-23  H.J. Lu  <hongjiu.lu@intel.com>
+
 	* Makefile (libc_common_src_files): Use strlen.S and strnlen.S
 	for x32.
 
