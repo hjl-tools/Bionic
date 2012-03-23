@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2010, Intel Corporation
+Copyright (c) 2012, Intel Corporation
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #if defined(USE_SSSE3)
 
 # define MEMCMP memcmp
-# include "ssse3-memcmp3-new.S"
+# include "ssse3-memcmp.S"
+
+	.globl bcmp
+	.type bcmp, @function
+	bcmp = memcmp 
 
 #else
 
