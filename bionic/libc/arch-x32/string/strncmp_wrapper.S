@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2010, Intel Corporation
+Copyright (c) 2012, Intel Corporation
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #if defined(USE_SSSE3)
 
 # define USE_AS_STRNCMP
-# define ssse3_strcmp_latest strncmp
-# include "ssse3-strcmp-latest.S"
+# define STRCMP strncmp
+# include "ssse3-strcmp4-no-bsf.S"
 
 #else
 
