@@ -437,9 +437,10 @@ libc_common_src_files+= \
 else
 libc_common_src_files+= \
 	arch-$(ARCH)/string/bzero.S \
+	arch-$(ARCH)/string/memcmp_wrapper.S \
 	arch-$(ARCH)/string/memset.S \
 	arch-$(ARCH)/string/memmove_wrapper.S \
-	string/memcmp.c \
+	string/ffs.c \
 	string/strcmp.c \
 	string/strncmp.c \
 	string/strlen.c
