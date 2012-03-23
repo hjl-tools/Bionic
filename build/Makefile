@@ -277,7 +277,6 @@ libc_common_src_files := \
 	string/strncat.c \
 	string/strncpy.c \
 	string/strndup.c \
-	string/strnlen.c \
 	string/strpbrk.c \
 	string/strsep.c \
 	string/strspn.c \
@@ -423,6 +422,7 @@ libc_common_src_files+= \
 	unistd/fstatfs.c \
 	unistd/statfs.c \
 	string/strchr.c \
+	string/strnlen.c \
 	string/strrchr.c \
 	string/index.c \
 	arch-$(ARCH)/string/bcopy_wrapper.S \
@@ -441,11 +441,12 @@ libc_common_src_files+= \
 	arch-$(ARCH)/string/memset.S \
 	arch-$(ARCH)/string/memmove_wrapper.S \
 	arch-$(ARCH)/string/strchr.S \
+	arch-$(ARCH)/string/strlen.S \
+	arch-$(ARCH)/string/strnlen.S \
 	arch-$(ARCH)/string/strrchr.S \
 	string/ffs.c \
 	string/strcmp.c \
-	string/strncmp.c \
-	string/strlen.c
+	string/strncmp.c
 endif
 
 ifeq ($(ARCH),x86)
