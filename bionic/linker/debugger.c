@@ -32,6 +32,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/prctl.h>
 #include <errno.h>
 
 #include "linker.h"
@@ -39,13 +40,34 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+extern int tgkill(int tgid, int tid, int sig);
+
 void notify_gdb_of_libraries();
+
+#define DEBUGGER_SOCKET_NAME "android:debuggerd"
+
+typedef enum {
+    // dump a crash
+    DEBUGGER_ACTION_CRASH,
+    // dump a tombstone file
+    DEBUGGER_ACTION_DUMP_TOMBSTONE,
+    // dump a backtrace only back to the socket
+    DEBUGGER_ACTION_DUMP_BACKTRACE,
+} debugger_action_t;
+
+/* message sent over the socket */
+typedef struct {
+    debugger_action_t action;
+    pid_t tid;
+} debugger_msg_t;
 
 #define  RETRY_ON_EINTR(ret,cond) \
     do { \
         ret = (cond); \
     } while (ret < 0 && errno == EINTR)
 
+// see man(2) prctl, specifically the section about PR_GET_NAME
+#define MAX_TASK_NAME_LEN (16)
 
 static int socket_abstract_client(const char *name, int type)
 {
@@ -100,6 +122,7 @@ static int socket_abstract_client(const char *name, int type)
 static void logSignalSummary(int signum, const siginfo_t* info)
 {
     char buffer[128];
+    char threadname[MAX_TASK_NAME_LEN + 1]; // one more for termination
 
     char* signame;
     switch (signum) {
@@ -108,14 +131,23 @@ static void logSignalSummary(int signum, const siginfo_t* info)
         case SIGBUS:    signame = "SIGBUS";     break;
         case SIGFPE:    signame = "SIGFPE";     break;
         case SIGSEGV:   signame = "SIGSEGV";    break;
+#if defined(SIGSTKFLT)
         case SIGSTKFLT: signame = "SIGSTKFLT";  break;
+#endif
         case SIGPIPE:   signame = "SIGPIPE";    break;
         default:        signame = "???";        break;
     }
 
+    if (prctl(PR_GET_NAME, (unsigned long)threadname, 0, 0, 0) != 0) {
+        strcpy(threadname, "<name unknown>");
+    } else {
+        // short names are null terminated by prctl, but the manpage
+        // implies that 16 byte names are not.
+        threadname[MAX_TASK_NAME_LEN] = 0;
+    }
     format_buffer(buffer, sizeof(buffer),
-        "Fatal signal %d (%s) at 0x%08x (code=%d)",
-        signum, signame, info->si_addr, info->si_code);
+        "Fatal signal %d (%s) at 0x%08x (code=%d), thread %d (%s)",
+        signum, signame, info->si_addr, info->si_code, gettid(), threadname);
 
     __libc_android_log_write(ANDROID_LOG_FATAL, "libc", buffer);
 }
@@ -124,36 +156,74 @@ static void logSignalSummary(int signum, const siginfo_t* info)
  * Catches fatal signals so we can ask debuggerd to ptrace us before
  * we crash.
  */
-void debugger_signal_handler(int n, siginfo_t* info, void* unused)
+void debugger_signal_handler(int n, siginfo_t* info, void* unused __attribute__((unused)))
 {
+    char msgbuf[128];
     unsigned tid;
     int s;
 
     logSignalSummary(n, info);
 
     tid = gettid();
-    s = socket_abstract_client("android:debuggerd", SOCK_STREAM);
+    s = socket_abstract_client(DEBUGGER_SOCKET_NAME, SOCK_STREAM);
 
-    if(s >= 0) {
+    if (s >= 0) {
         /* debugger knows our pid from the credentials on the
          * local socket but we need to tell it our tid.  It
          * is paranoid and will verify that we are giving a tid
          * that's actually in our process
          */
         int  ret;
-
-        RETRY_ON_EINTR(ret, write(s, &tid, sizeof(unsigned)));
-        if (ret == sizeof(unsigned)) {
+        debugger_msg_t msg;
+        msg.action = DEBUGGER_ACTION_CRASH;
+        msg.tid = tid;
+        RETRY_ON_EINTR(ret, write(s, &msg, sizeof(msg)));
+        if (ret == sizeof(msg)) {
             /* if the write failed, there is no point to read on
              * the file descriptor. */
             RETRY_ON_EINTR(ret, read(s, &tid, 1));
+            int savedErrno = errno;
             notify_gdb_of_libraries();
+            errno = savedErrno;
         }
+
+        if (ret < 0) {
+            /* read or write failed -- broken connection? */
+            format_buffer(msgbuf, sizeof(msgbuf),
+                "Failed while talking to debuggerd: %s", strerror(errno));
+            __libc_android_log_write(ANDROID_LOG_FATAL, "libc", msgbuf);
+        }
+
         close(s);
+    } else {
+        /* socket failed; maybe process ran out of fds */
+        format_buffer(msgbuf, sizeof(msgbuf),
+            "Unable to open connection to debuggerd: %s", strerror(errno));
+        __libc_android_log_write(ANDROID_LOG_FATAL, "libc", msgbuf);
     }
 
     /* remove our net so we fault for real when we return */
     signal(n, SIG_DFL);
+
+    /*
+     * These signals are not re-thrown when we resume.  This means that
+     * crashing due to (say) SIGPIPE doesn't work the way you'd expect it
+     * to.  We work around this by throwing them manually.  We don't want
+     * to do this for *all* signals because it'll screw up the address for
+     * faults like SIGSEGV.
+     */
+    switch (n) {
+        case SIGABRT:
+        case SIGFPE:
+        case SIGPIPE:
+#ifdef SIGSTKFLT
+        case SIGSTKFLT:
+#endif
+            (void) tgkill(getpid(), gettid(), n);
+            break;
+        default:    // SIGILL, SIGBUS, SIGSEGV
+            break;
+    }
 }
 
 void debugger_init()
@@ -169,6 +239,8 @@ void debugger_init()
     sigaction(SIGBUS, &act, NULL);
     sigaction(SIGFPE, &act, NULL);
     sigaction(SIGSEGV, &act, NULL);
+#if defined(SIGSTKFLT)
     sigaction(SIGSTKFLT, &act, NULL);
+#endif
     sigaction(SIGPIPE, &act, NULL);
 }

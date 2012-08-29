@@ -65,6 +65,11 @@ __noreturn void __libc_init(uintptr_t *elfdata,
     int  argc;
     char **argv, **envp;
 
+    __libc_init_tls(NULL);
+
+    /* get the initial thread from TLS and add it to gThreadList */
+    _pthread_internal_add(__get_thread());
+
     /* Initialize the C runtime environment */
     __libc_init_common(elfdata);
 
@@ -74,11 +79,6 @@ __noreturn void __libc_init(uintptr_t *elfdata,
 
     /* pre-init array. */
     call_array(structors->preinit_array);
-
-#ifndef __i386__
-    /* .ctors section initializers, for non-arm-eabi ABIs */
-    call_array(structors->ctors_array);
-#endif
 
     // call static constructors
     call_array(structors->init_array);
