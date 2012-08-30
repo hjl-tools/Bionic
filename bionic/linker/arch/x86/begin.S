@@ -43,5 +43,3 @@ _start:
         /* entry point expects sp to point to elfdata */
         popl   %esp
         jmp    *%eax
-
-#include "arch-x86/bionic/__stack_chk_fail_local.S"
