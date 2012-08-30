@@ -76,11 +76,23 @@ void __libc_preinit(void)
 
     __libc_init_common(elfdata);
 
+    /* Setup pthread routines accordingly to the environment.
+     * Requires system properties
+     */
+    extern void pthread_debug_init(void);
+    pthread_debug_init();
+
     /* Setup malloc routines accordingly to the environment.
      * Requires system properties
      */
     extern void malloc_debug_init(void);
     malloc_debug_init();
+}
+
+void __libc_postfini(void)
+{
+    extern void malloc_debug_fini(void);
+    malloc_debug_fini();
 }
 
 /* This function is called from the executable's _start entry point

@@ -306,9 +306,11 @@
 #if __GNUC_PREREQ__(2, 96)
 #define __noreturn    __attribute__((__noreturn__))
 #define __mallocfunc  __attribute__((malloc))
+#define __purefunc    __attribute__((pure))
 #else
 #define __noreturn
 #define __mallocfunc
+#define __purefunc
 #endif
 
 /*
@@ -498,5 +500,14 @@
 
 #define  __BIONIC__   1
 #include <android/api-level.h>
+
+#if defined(_FORTIFY_SOURCE) && _FORTIFY_SOURCE > 0 && defined(__OPTIMIZE__) && __OPTIMIZE__ > 0
+#define __BIONIC_FORTIFY_INLINE \
+    extern inline \
+    __attribute__ ((always_inline)) \
+    __attribute__ ((gnu_inline)) \
+    __attribute__ ((artificial))
+#define __BIONIC_FORTIFY_UNKNOWN_SIZE ((size_t) -1)
+#endif
 
 #endif /* !_SYS_CDEFS_H_ */

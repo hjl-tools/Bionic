@@ -195,9 +195,24 @@ struct mallinfo mallinfo()
     return dlmallinfo();
 }
 
-void* valloc(size_t bytes) {
-    /* assume page size of 4096 bytes */
-    return memalign( getpagesize(), bytes );
+size_t malloc_usable_size(void* mem)
+{
+    return dlmalloc_usable_size(mem);
+}
+
+void* valloc(size_t bytes)
+{
+    return dlvalloc(bytes);
+}
+
+void* pvalloc(size_t bytes)
+{
+    return dlpvalloc(bytes);
+}
+
+int posix_memalign(void** memptr, size_t alignment, size_t size)
+{
+    return dlposix_memalign(memptr, alignment, size);
 }
 
 /* Support for malloc debugging.
@@ -240,17 +255,6 @@ void* memalign(size_t alignment, size_t bytes) {
 #include <dlfcn.h>
 #include "logd.h"
 
-// =============================================================================
-// log functions
-// =============================================================================
-
-#define debug_log(format, ...)  \
-   __libc_android_log_print(ANDROID_LOG_DEBUG, "libc", (format), ##__VA_ARGS__ )
-#define error_log(format, ...)  \
-   __libc_android_log_print(ANDROID_LOG_ERROR, "libc", (format), ##__VA_ARGS__ )
-#define info_log(format, ...)  \
-   __libc_android_log_print(ANDROID_LOG_INFO, "libc", (format), ##__VA_ARGS__ )
-
 /* Table for dispatching malloc calls, depending on environment. */
 static MallocDebug gMallocUse __attribute__((aligned(32))) = {
     dlmalloc, dlfree, dlcalloc, dlrealloc, dlmemalign
@@ -288,6 +292,14 @@ static void* libc_malloc_impl_handle = NULL;
 #define MALLOC_ALIGNMENT ((size_t)8U)
 #endif  /* MALLOC_ALIGNMENT */
 
+/* This variable is set to the value of property libc.debug.malloc.backlog,
+ * when the value of libc.debug.malloc = 10.  It determines the size of the
+ * backlog we use to detect multiple frees.  If the property is not set, the
+ * backlog length defaults to an internal constant defined in
+ * malloc_debug_check.c
+ */
+unsigned int malloc_double_free_backlog;
+
 /* Initializes memory allocation framework once per process. */
 static void malloc_init_impl(void)
 {
@@ -298,6 +310,7 @@ static void malloc_init_impl(void)
     unsigned int memcheck_enabled = 0;
     char env[PROP_VALUE_MAX];
     char memcheck_tracing[PROP_VALUE_MAX];
+    char debug_program[PROP_VALUE_MAX];
 
     /* Get custom malloc debug level. Note that emulator started with
      * memory checking option will have priority over debug level set in
@@ -325,13 +338,30 @@ static void malloc_init_impl(void)
         return;
     }
 
+    /* If libc.debug.malloc.program is set and is not a substring of progname,
+     * then exit.
+     */
+    if (__system_property_get("libc.debug.malloc.program", debug_program)) {
+        if (!strstr(__progname, debug_program)) {
+            return;
+        }
+    }
+
     // Lets see which .so must be loaded for the requested debug level
     switch (debug_level) {
         case 1:
         case 5:
-        case 10:
+        case 10: {
+            char debug_backlog[PROP_VALUE_MAX];
+            if (__system_property_get("libc.debug.malloc.backlog", debug_backlog)) {
+                malloc_double_free_backlog = atoi(debug_backlog);
+                info_log("%s: setting backlog length to %d\n",
+                         __progname, malloc_double_free_backlog);
+            }
+
             so_name = "/system/lib/libc_malloc_debug_leak.so";
             break;
+        }
         case 20:
             // Quick check: debug level 20 can only be handled in emulator.
             if (!qemu_running) {
@@ -475,7 +505,19 @@ static void malloc_init_impl(void)
     }
 }
 
+static void malloc_fini_impl(void)
+{
+    if (libc_malloc_impl_handle) {
+        MallocDebugFini malloc_debug_finalize = NULL;
+        malloc_debug_finalize =
+                dlsym(libc_malloc_impl_handle, "malloc_debug_finalize");
+        if (malloc_debug_finalize)
+            malloc_debug_finalize();
+    }
+}
+
 static pthread_once_t  malloc_init_once_ctl = PTHREAD_ONCE_INIT;
+static pthread_once_t  malloc_fini_once_ctl = PTHREAD_ONCE_INIT;
 
 #endif  // !LIBC_STATIC
 #endif  // USE_DL_PREFIX
@@ -491,6 +533,17 @@ void malloc_debug_init(void)
 #if defined(USE_DL_PREFIX) && !defined(LIBC_STATIC)
     if (pthread_once(&malloc_init_once_ctl, malloc_init_impl)) {
         error_log("Unable to initialize malloc_debug component.");
+    }
+#endif  // USE_DL_PREFIX && !LIBC_STATIC
+}
+
+void malloc_debug_fini(void)
+{
+    /* We need to finalize malloc iff we implement here custom
+     * malloc routines (i.e. USE_DL_PREFIX is defined) for libc.so */
+#if defined(USE_DL_PREFIX) && !defined(LIBC_STATIC)
+    if (pthread_once(&malloc_fini_once_ctl, malloc_fini_impl)) {
+        error_log("Unable to finalize malloc_debug component.");
     }
 #endif  // USE_DL_PREFIX && !LIBC_STATIC
 }
