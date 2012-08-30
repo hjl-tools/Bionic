@@ -1,3 +1,51 @@
+2012-08-30  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile (SAFE_IOP_DIR): New.
+	(SAFE_IOP_INCLUDE_DIR): Likewise.
+	(INCLUDES): "Drop /private".
+	(CFLAGS): Add -mfpmath=sse for x86.  Add -DPLATFORM_SDK_VERSION=16.
+	(libc_common_src_files): Remove unistd/creat.c, unistd/getcwd.c
+	unistd/nice.c, bionic/ssp.c, bionic/stubs.c, regex/regcomp.c,
+	regex/regerror.c, regex/regexec.c and regex/regfree.c.  Add
+	stdio/__fgets_chk.c, stdio/__snprintf_chk.c,
+	stdio/__sprintf_chk.c, stdio/__vsnprintf_chk.c,
+	stdio/__vsprintf_chk.c, string/__memcpy_chk.c,
+	string/__memmove_chk.c, string/__memset_chk.c,
+	string/__strcat_chk.c, string/__strcpy_chk.c,
+	string/__strlcat_chk.c, string/__strlcpy_chk.c,
+	string/__strlen_chk.c, string/__strncat_chk.c,
+	string/__strncpy_chk.c, bionic/bionic_clone.c,
+	bionic/getcwd.cpp, bionic/stubs.cpp, bionic/tdestroy.c.
+	Replace arch-$(ARCH)/bionic/atomics_$(ARCH).S with
+	arch-$(ARCH)/bionic/futex_$(ARCH).S.
+	(libc_upstream_netbsd_src_files): New.
+	(libc_arch_static_src_files): Replace
+	arch-$(ARCH)/bionic/dl_iterate_phdr_static.c with
+	bionic/dl_iterate_phdr_static.c.
+	(libc_common_cflags): Add -DHAVE_UNWIND_CONTEXT_STRUCT,
+	-DHAVE_DLADDR=1 and -std=gnu99.
+	(libc_common_c_includes): Add $(SAFE_IOP_INCLUDE_DIR).
+	(malloc_src_files): Add bionic/pthread_debug.c.
+	(ssp_src_files): New.
+	(ssp_OBJS): Likewise.
+	(OBJS): Add $(ssp_OBJS).
+	(CFLAGS): Add -fno-stack-protector for $(ssp_OBJS).
+	(libc.a_src_files): Add $(ssp_src_files).
+	(LINKER_SRC_FILES): Remove linker.c and ba.c.  Add linker.cpp
+	and linker_phdr.c.
+	(LINKER_TEXT_BASE): Removed.
+	(LINKER_AREA_SIZE): LIkewise.
+	(ld.so_LDFLAGS): Changed to -shared.
+	(LINKER_CFLAGS): Updated with -fno-stack-protector
+	-fvisibility=hidden -std=gnu99.
+	($(LIB_DIR)/crtbegin_dynamic.o): New target.
+	($(LIB_DIR)/crtbegin_static.o): Likewise.
+	($(OBJ_DIR)/crtbegin_dynamic1.o): Likewise.
+	($(OBJ_DIR)/crtbegin_static1.o): Likewise.
+	($(OBJ_DIR)/crtbrand.o): Likewise.
+	($(OBJ_DIR)/crtbrand.s): Likewise.
+	($(LIB_DIR)/ld.so): Remove $(LIB_DIR)/crtend_android.o.
+
 2012-03-23  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* Makefile (libc_common_src_files): Use strcat_wrapper.S,

@@ -10,13 +10,16 @@ BIONIC_LIBSTDCXX_DIR=$(BIONIC_DIR)/libstdc++
 CORE_DIR=$(PWD)/../core
 CORE_INCLUDE_DIR=$(CORE_DIR)/include
 
+SAFE_IOP_DIR=$(PWD)/../safe-iop
+SAFE_IOP_INCLUDE_DIR=$(SAFE_IOP_DIR)/include
+
 ARCH?=x86
 
 INCLUDES=\
 	-I$(BIONIC_LIBC_DIR)/arch-$(ARCH)/include \
 	-I$(BIONIC_LIBC_DIR)/include \
 	-I$(BIONIC_LIBC_DIR)/kernel/arch-$(ARCH) \
-	-I$(BIONIC_LIBC_DIR)/private \
+	-I$(BIONIC_LIBC_DIR) \
 	-I$(BIONIC_LIBC_DIR)/kernel \
 	-I$(BIONIC_LIBC_DIR)/kernel/common \
 	-I$(BIONIC_LIBM_DIR)/include \
@@ -30,8 +33,9 @@ endif
 CPP_FLAGS=-Ulinux -D__ANDROID__ -DANDROID -DUSE_SSSE3 -DUSE_SSE2 -DPIC
 CPP_FLAGS+=-DSHARED
 CPP_FLAGS+=-DANDROID_SMP=1
+CPP_FLAGS+=-DPLATFORM_SDK_VERSION=16
 ifeq ($(ARCH),x86)
-CFLAGS=-m32 -march=atom -mbionic
+CFLAGS=-m32 -march=atom -mbionic -mfpmath=sse
 else
 CFLAGS=-mx32
 CPP_FLAGS+=-DMALLOC_ALIGNMENT=16
@@ -97,7 +101,6 @@ libc_common_src_files := \
 	unistd/abort.c \
 	unistd/alarm.c \
 	unistd/brk.c \
-	unistd/creat.c \
 	unistd/daemon.c \
 	unistd/eventfd.c \
 	unistd/exec.c \
@@ -105,7 +108,6 @@ libc_common_src_files := \
 	unistd/fnmatch.c \
 	unistd/ftime.c \
 	unistd/ftok.c \
-	unistd/getcwd.c \
 	unistd/getdtablesize.c \
 	unistd/gethostname.c \
 	unistd/getopt_long.c \
@@ -116,7 +118,6 @@ libc_common_src_files := \
 	unistd/isatty.c \
 	unistd/issetugid.c \
 	unistd/killpg.c \
-	unistd/nice.c \
 	unistd/open.c \
 	unistd/openat.c \
 	unistd/opendir.c \
@@ -223,6 +224,11 @@ libc_common_src_files := \
 	stdio/vsscanf.c \
 	stdio/wbuf.c \
 	stdio/wsetup.c \
+	stdio/__fgets_chk.c \
+	stdio/__snprintf_chk.c \
+	stdio/__sprintf_chk.c \
+	stdio/__vsnprintf_chk.c \
+	stdio/__vsprintf_chk.c \
 	stdlib/_rand48.c \
 	stdlib/assert.c \
 	stdlib/atexit.c \
@@ -280,7 +286,16 @@ libc_common_src_files := \
 	string/strstr.c \
 	string/strtok.c \
 	string/strtotimeval.c \
-	string/strxfrm.c \
+	string/__memcpy_chk.c \
+	string/__memmove_chk.c \
+	string/__memset_chk.c \
+	string/__strcat_chk.c \
+	string/__strcpy_chk.c \
+	string/__strlcat_chk.c \
+	string/__strlcpy_chk.c \
+	string/__strlen_chk.c \
+	string/__strncat_chk.c \
+	string/__strncpy_chk.c \
 	wchar/wcpcpy.c \
 	wchar/wcpncpy.c \
 	wchar/wcscasecmp.c \
@@ -325,6 +340,7 @@ libc_common_src_files := \
 	tzcode/strftime.c \
 	tzcode/strptime.c \
 	bionic/__set_errno.c \
+	bionic/bionic_clone.c \
 	bionic/cpuacct.c \
 	bionic/arc4random.c \
 	bionic/basename.c \
@@ -338,6 +354,7 @@ libc_common_src_files := \
 	bionic/fdprintf.c \
 	bionic/fork.c \
 	bionic/fts.c \
+	bionic/getcwd.cpp \
 	bionic/if_nametoindex.c \
 	bionic/if_indextoname.c \
 	bionic/ioctl.c \
@@ -353,9 +370,9 @@ libc_common_src_files := \
 	bionic/sched_cpucount.c \
 	bionic/semaphore.c \
 	bionic/sha1.c \
-	bionic/ssp.c \
-	bionic/stubs.c \
+	bionic/stubs.cpp \
 	bionic/system_properties.c \
+	bionic/tdestroy.c \
 	bionic/time64.c \
 	bionic/thread_atexit.c \
 	bionic/utime.c \
@@ -390,18 +407,26 @@ libc_common_src_files := \
 	netbsd/nameser/ns_netint.c \
 	netbsd/nameser/ns_print.c \
 	netbsd/nameser/ns_samedomain.c \
-	regex/regcomp.c \
-	regex/regerror.c \
-	regex/regexec.c \
-	regex/regfree.c \
+
+libc_upstream_netbsd_src_files := \
+	upstream-netbsd/libc/compat-43/creat.c \
+	upstream-netbsd/libc/gen/nice.c \
+	upstream-netbsd/libc/regex/regcomp.c \
+	upstream-netbsd/libc/regex/regerror.c \
+	upstream-netbsd/libc/regex/regexec.c \
+	upstream-netbsd/libc/regex/regfree.c \
+	upstream-netbsd/libc/stdlib/tdelete.c \
+	upstream-netbsd/libc/stdlib/tfind.c \
+	upstream-netbsd/libc/stdlib/tsearch.c \
+	upstream-netbsd/libc/string/strxfrm.c \
 
 libc_common_src_files += \
 	arch-$(ARCH)/bionic/__get_sp.S \
 	arch-$(ARCH)/bionic/__get_tls.c \
 	arch-$(ARCH)/bionic/__set_tls.c \
-	arch-$(ARCH)/bionic/atomics_$(ARCH).S \
 	arch-$(ARCH)/bionic/clone.S \
 	arch-$(ARCH)/bionic/_exit_with_stack_teardown.S \
+	arch-$(ARCH)/bionic/futex_$(ARCH).S \
 	arch-$(ARCH)/bionic/setjmp.S \
 	arch-$(ARCH)/bionic/_setjmp.S \
 	arch-$(ARCH)/bionic/sigsetjmp.S \
@@ -470,7 +495,7 @@ endif
 
 # this is needed for static versions of libc
 libc_arch_static_src_files := \
-	arch-$(ARCH)/bionic/dl_iterate_phdr_static.c
+	bionic/dl_iterate_phdr_static.c
 
 libc_arch_dynamic_src_files :=
 
@@ -487,8 +512,11 @@ libc_common_cflags := \
 		-DSOFTFLOAT                     \
 		-DFLOATING_POINT		\
 		-DINET6 \
-		-I$(BIONIC_LIBC_DIR)/private \
-		-DUSE_DL_PREFIX \
+		-I$(BIONIC_LIBC_DIR)/private	\
+		-DHAVE_UNWIND_CONTEXT_STRUCT	\
+		-DHAVE_DLADDR=1			\
+		-DUSE_DL_PREFIX			\
+		-std=gnu99			\
 		-DPOSIX_MISTAKE
 
 # these macro definitions are required to implement the
@@ -509,7 +537,8 @@ libc_common_c_includes=\
 		$(BIONIC_LIBC_DIR)/stdlib  \
 		$(BIONIC_LIBC_DIR)/string  \
 		$(BIONIC_LIBC_DIR)/stdio \
-		$(CORE_INCLUDE_DIR)
+		$(CORE_INCLUDE_DIR) \
+		$(SAFE_IOP_INCLUDE_DIR)
 libc_common_cflags+= $(addprefix -I, $(libc_common_c_includes))
 
 # ========================================================
@@ -517,6 +546,7 @@ libc_common_cflags+= $(addprefix -I, $(libc_common_c_includes))
 # ========================================================
 malloc_src_files=\
 	bionic/dlmalloc.c \
+	bionic/pthread_debug.c \
 	bionic/malloc_debug_common.c
 
 libc_nomalloc_src_files := \
@@ -533,7 +563,17 @@ STATIC_LIBS+=$(libc_nomalloc.a_LIB)
 
 $(libc_nomalloc.a_OBJS): CFLAGS += $(libc_common_cflags)
 
-libc.a_src_files=$(libc_nomalloc_src_files) $(malloc_src_files)
+ssp_src_files := \
+	bionic/ssp.c
+
+ssp_OBJS=$(addsuffix .os, $(basename $(ssp_src_files)))
+ssp_OBJS:=$(addprefix $(OBJ_DIR)/, $(ssp_OBJS))
+OBJS+=$(ssp_OBJS)
+
+$(ssp_OBJS): CFLAGS += $(libc_common_cflags) -fno-stack-protector
+
+libc.a_src_files=$(libc_nomalloc_src_files) $(malloc_src_files) \
+	$(ssp_src_files)
 libc.a_OBJS=$(addsuffix .o, $(basename $(libc.a_src_files)))
 libc.a_OBJS:=$(addprefix $(OBJ_DIR)/, $(libc.a_OBJS))
 OBJS+=$(libc.a_OBJS)
@@ -555,6 +595,7 @@ libc.so_src_files := \
 	$(libc_static_common_src_files) \
 	$(libc_arch_dynamic_src_files) \
 	$(malloc_src_files) \
+	$(ssp_src_files) \
 	bionic/libc_init_dynamic.c
 libc.so_OBJS=$(addsuffix .os, $(basename $(libc.so_src_files)))
 libc.so_OBJS:=$(addprefix $(OBJ_DIR)/, $(libc.so_OBJS))
@@ -806,30 +847,21 @@ STATIC_LIBSTDCXX=$(libstdc++.a_LIB) \
 
 LINKER_SRC_FILES:= \
 	arch/$(ARCH)/begin.S \
-	linker.c \
+	debugger.c \
+	dlfcn.c \
+	linker.cpp \
 	linker_environ.c \
 	linker_format.c \
-	rt.c \
-	dlfcn.c \
-	debugger.c \
-	ba.c
+	linker_phdr.c \
+	rt.c
 
-# This is aligned to 4K page boundary so that both GNU ld and gold work.  Gold
-# actually produces a correct binary with starting address 0xB0000100 but the
-# extra objcopy step to rename symbols causes the resulting binary to be misaligned
-# and unloadable.  Increasing the alignment adds an extra 3840 bytes in padding
-# but switching to gold saves about 1M of space.
-LINKER_TEXT_BASE := 0xB0001000
+ld.so_LDFLAGS := -shared
 
-# The maximum size set aside for the linker, from
-# LINKER_TEXT_BASE rounded down to a megabyte.
-LINKER_AREA_SIZE := 0x01000000
-
-ld.so_LDFLAGS := -Wl,-Ttext,$(LINKER_TEXT_BASE)
-
-LINKER_CFLAGS += -DPRELINK
-LINKER_CFLAGS += -DLINKER_TEXT_BASE=$(LINKER_TEXT_BASE)
-LINKER_CFLAGS += -DLINKER_AREA_SIZE=$(LINKER_AREA_SIZE)
+LINKER_CFLAGS +=-fno-stack-protector \
+		-Wstrict-overflow=5 \
+		-fvisibility=hidden \
+		-std=gnu99 \
+		-Wall -Wextra
 
 # Set LINKER_DEBUG to either 1 or 0
 #
@@ -1046,6 +1078,33 @@ $(LIB_DIR)/%.o: %.S
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(LIB_DIR)/crtbegin_dynamic.o: $(OBJ_DIR)/crtbegin_dynamic1.o \
+	$(OBJ_DIR)/crtbrand.o
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) -nostdlib -r -o $@ $^ 
+
+$(LIB_DIR)/crtbegin_static.o: $(OBJ_DIR)/crtbegin_static1.o \
+	$(OBJ_DIR)/crtbrand.o
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) -nostdlib -r -o $@ $^ 
+
+$(OBJ_DIR)/crtbegin_dynamic1.o: crtbegin.S
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+$(OBJ_DIR)/crtbegin_static1.o: crtbegin.S
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+$(OBJ_DIR)/crtbrand.o: $(OBJ_DIR)/crtbrand.s
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -c -o $@
+
+$(OBJ_DIR)/crtbrand.s: bionic/crtbrand.c
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -S -o $@
+	sed -i -e '/\.note\.ABI-tag/s/progbits/note/' $@
+
 $(LIB_DIR)/crtend_android.o: crtend.S
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< -c -o $@
@@ -1104,7 +1163,7 @@ $(libexception-foo.so_LIB): $(libc.so_LIB) $(libstdc++.so_LIB)
 
 $(LIB_DIR)/ld.so: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS)
 	$(CC) $(CFLAGS) $($(@F)_LDFLAGS) -o $@ -nostdlib -Wl,-Bstatic \
-		 $($(@F)_OBJS) $($(@F)_DEPS) $(LIB_DIR)/crtend_android.o
+		 $($(@F)_OBJS) $($(@F)_DEPS)
 	$(OBJCOPY) --prefix-symbols=__dl_ $@
 
 $(LIB_DIR)/libdl.so: $(OBJS)
