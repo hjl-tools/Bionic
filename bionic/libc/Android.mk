@@ -505,7 +505,8 @@ libc_common_cflags := \
     -I$(LOCAL_PATH)/private \
     -DPOSIX_MISTAKE \
     -DLOG_ON_HEAP_ERROR \
-    -std=gnu99
+    -std=gnu99 \
+    -Wall -Wextra
 
 # these macro definitions are required to implement the
 # 'timezone' and 'daylight' global variables, as well as
@@ -584,10 +585,6 @@ libc_crt_target_cflags += \
     -I$(LOCAL_PATH)/include  \
     -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 
-ifeq ($(TARGET_ARCH),arm)
-    libc_crt_target_cflags += -DCRT_LEGACY_WORKAROUND
-endif
-
 # Define some common includes
 # ========================================================
 libc_common_c_includes := \
@@ -617,86 +614,100 @@ libc_crt_target_cflags += \
 # static C++ destructors are properly called on dlclose().
 #
 ifeq ($(TARGET_ARCH),arm)
-    libc_crtstart_extension := c
+    libc_crtbegin_extension := c
     libc_crt_target_so_cflags :=
 endif
 ifeq ($(TARGET_ARCH),mips)
-    libc_crtstart_extension := S
+    libc_crtbegin_extension := S
     libc_crt_target_so_cflags := -fPIC
 endif
 ifeq ($(TARGET_ARCH),x86)
-    libc_crtstart_extension := S
+    libc_crtbegin_extension := S
     libc_crt_target_so_cflags := -fPIC
 endif
-ifeq ($(libc_crtstart_extension),)
+ifeq ($(libc_crtbegin_extension),)
     $(error $(TARGET_ARCH) not supported)
 endif
 libc_crt_target_so_cflags += $(libc_crt_target_cflags)
-libc_crt_target_crtstart_file := $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtbegin.$(libc_crtstart_extension)
-libc_crt_target_crtstart_so_file := $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtbegin_so.$(libc_crtstart_extension)
+libc_crt_target_crtbegin_file := $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtbegin.$(libc_crtbegin_extension)
+libc_crt_target_crtbegin_so_file := $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtbegin_so.$(libc_crtbegin_extension)
 
 # See the comment in crtbrand.c for the reason why we need to generate
 # crtbrand.s before generating crtbrand.o.
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbrand.s
 $(GEN): $(LOCAL_PATH)/bionic/crtbrand.c
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_so_cflags) -S -o $@ $<
-	sed -i -e '/\.note\.ABI-tag/s/progbits/note/' $@
+	$(hide) $(TARGET_CC) $(libc_crt_target_so_cflags) -S \
+		-MD -MF $(@:%.s=%.d) -o $@ $<
+	$(hide) sed -i -e '/\.note\.ABI-tag/s/progbits/note/' $@
+	$(call transform-d-to-p-args,$(@:%.s=%.d),$(@:%.s=%.P))
+-include $(GEN:%.s=%.P)
 ALL_GENERATED_SOURCES += $(GEN)
 
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbrand.o
 $(GEN): $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbrand.s
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_so_cflags) -o $@ -c $<
+	$(hide) $(TARGET_CC) $(libc_crt_target_so_cflags) -o $@ -c $<
 ALL_GENERATED_SOURCES += $(GEN)
 
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbegin_so.o
-$(GEN): $(libc_crt_target_crtstart_so_file)
+$(GEN): $(libc_crt_target_crtbegin_so_file)
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_so_cflags) -o $@ -c $<
+	$(hide) $(TARGET_CC) $(libc_crt_target_so_cflags) \
+		-MD -MF $(@:%.o=%.d) -o $@ -c $<
+	$(transform-d-to-p)
+-include $(GEN:%.o=%.P)
 ALL_GENERATED_SOURCES += $(GEN)
 
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtend_so.o
 $(GEN): $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtend_so.S
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_so_cflags) -o $@ -c $<
+	$(hide) $(TARGET_CC) $(libc_crt_target_so_cflags) \
+		-MD -MF $(@:%.o=%.d) -o $@ -c $<
+	$(transform-d-to-p)
+-include $(GEN:%.o=%.P)
 ALL_GENERATED_SOURCES += $(GEN)
 
+# The following two are installed to device
 GEN := $(TARGET_OUT_SHARED_LIBRARIES)/crtbegin_so.o
-$(GEN): $(libc_crt_target_crtstart_so_file)
-	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_so_cflags) -o $@ -c $<
+$(GEN): $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbegin_so.o
+	$(hide) mkdir -p $(dir $@) && cp -f $< $@
 ALL_GENERATED_SOURCES += $(GEN)
 
 GEN := $(TARGET_OUT_SHARED_LIBRARIES)/crtend_so.o
-$(GEN): $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtend_so.S
-	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_so_cflags) -o $@ -c $<
+$(GEN): $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtend_so.o
+	$(hide) mkdir -p $(dir $@) && cp -f $< $@
 ALL_GENERATED_SOURCES += $(GEN)
 
 
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbegin_static1.o
-$(GEN): $(libc_crt_target_crtstart_file)
+$(GEN): $(libc_crt_target_crtbegin_file)
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_cflags) -o $@ -c $<
+	$(hide) $(TARGET_CC) $(libc_crt_target_cflags) \
+		-MD -MF $(@:%.o=%.d) -o $@ -c $<
+	$(transform-d-to-p)
+-include $(GEN:%.o=%.P)
 ALL_GENERATED_SOURCES += $(GEN)
 
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbegin_static.o
 $(GEN): $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbegin_static1.o $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbrand.o
 	@mkdir -p $(dir $@)
-	$(TARGET_LD) -r -o $@ $^
+	$(hide) $(TARGET_LD) -r -o $@ $^
 ALL_GENERATED_SOURCES += $(GEN)
 
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbegin_dynamic1.o
-$(GEN): $(libc_crt_target_crtstart_file)
+$(GEN): $(libc_crt_target_crtbegin_file)
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_cflags) -o $@ -c $<
+	$(hide) $(TARGET_CC) $(libc_crt_target_cflags) \
+		-MD -MF $(@:%.o=%.d) -o $@ -c $<
+	$(transform-d-to-p)
+-include $(GEN:%.o=%.P)
 ALL_GENERATED_SOURCES += $(GEN)
 
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbegin_dynamic.o
 $(GEN): $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbegin_dynamic1.o $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtbrand.o
 	@mkdir -p $(dir $@)
-	$(TARGET_LD) -r -o $@ $^
+	$(hide) $(TARGET_LD) -r -o $@ $^
 ALL_GENERATED_SOURCES += $(GEN)
 
 # We rename crtend.o to crtend_android.o to avoid a
@@ -704,7 +715,10 @@ ALL_GENERATED_SOURCES += $(GEN)
 GEN := $(TARGET_OUT_INTERMEDIATE_LIBRARIES)/crtend_android.o
 $(GEN): $(LOCAL_PATH)/arch-$(TARGET_ARCH)/bionic/crtend.S
 	@mkdir -p $(dir $@)
-	$(TARGET_CC) $(libc_crt_target_cflags) -o $@ -c $<
+	$(hide) $(TARGET_CC) $(libc_crt_target_cflags) \
+		-MD -MF $(@:%.o=%.d) -o $@ -c $<
+	$(transform-d-to-p)
+-include $(GEN:%.o=%.P)
 ALL_GENERATED_SOURCES += $(GEN)
 
 
@@ -762,9 +776,6 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := $(libc_common_src_files)
 LOCAL_CFLAGS := $(libc_common_cflags)
-ifeq ($(TARGET_ARCH),arm)
-    LOCAL_CFLAGS += -DCRT_LEGACY_WORKAROUND
-endif
 LOCAL_C_INCLUDES := $(libc_common_c_includes)
 LOCAL_MODULE := libc_common
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
@@ -812,7 +823,7 @@ LOCAL_SRC_FILES := \
 	$(libc_arch_static_src_files) \
 	$(libc_static_common_src_files) \
 	bionic/dlmalloc.c \
-	bionic/malloc_debug_common.c \
+	bionic/malloc_debug_common.cpp \
 	bionic/libc_init_static.c
 
 LOCAL_CFLAGS := $(libc_common_cflags) \
@@ -844,9 +855,20 @@ LOCAL_SRC_FILES := \
 	$(libc_arch_dynamic_src_files) \
 	$(libc_static_common_src_files) \
 	bionic/dlmalloc.c \
-	bionic/malloc_debug_common.c \
+	bionic/malloc_debug_common.cpp \
 	bionic/pthread_debug.c \
 	bionic/libc_init_dynamic.c
+
+ifeq ($(TARGET_ARCH),arm)
+	LOCAL_NO_CRT := true
+	LOCAL_CFLAGS += -DCRT_LEGACY_WORKAROUND
+
+	LOCAL_SRC_FILES := \
+		arch-arm/bionic/crtbegin_so.c \
+		arch-arm/bionic/atexit_legacy.c \
+		$(LOCAL_SRC_FILES) \
+		arch-arm/bionic/crtend_so.S
+endif
 
 LOCAL_MODULE:= libc
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
@@ -886,15 +908,15 @@ LOCAL_CFLAGS := \
 LOCAL_C_INCLUDES := $(libc_common_c_includes)
 
 LOCAL_SRC_FILES := \
-	bionic/malloc_debug_leak.c \
-	bionic/malloc_debug_check.c \
-	bionic/malloc_debug_check_mapinfo.c \
-	bionic/malloc_debug_stacktrace.c
+	bionic/malloc_debug_leak.cpp \
+	bionic/malloc_debug_check.cpp \
+	bionic/malloc_debug_check_mapinfo.cpp \
+	bionic/malloc_debug_stacktrace.cpp
 
 LOCAL_MODULE:= libc_malloc_debug_leak
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
 
-LOCAL_SHARED_LIBRARIES := libc
+LOCAL_SHARED_LIBRARIES := libc libdl
 LOCAL_WHOLE_STATIC_LIBRARIES := libc_common
 LOCAL_SYSTEM_SHARED_LIBRARIES :=
 LOCAL_ALLOW_UNDEFINED_SYMBOLS := true
@@ -917,7 +939,7 @@ LOCAL_CFLAGS := \
 LOCAL_C_INCLUDES := $(libc_common_c_includes)
 
 LOCAL_SRC_FILES := \
-	bionic/malloc_debug_qemu.c
+	bionic/malloc_debug_qemu.cpp
 
 LOCAL_MODULE:= libc_malloc_debug_qemu
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
