@@ -1,3 +1,7 @@
+2012-09-13  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* Makefile (all): Display executable name.
+
 2012-08-30  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* Makefile (SAFE_IOP_DIR): New.

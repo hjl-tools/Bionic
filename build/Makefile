@@ -997,6 +997,7 @@ VPATH+=test
 all: $(OBJS) $(SHARED_LIBS) $(STATIC_LIBS) $(ld.so_LIB) $(EXES) .gdbinit
 	export LD_LIBRARY_PATH=$(LIB_DIR); \
 	for f in $(EXES); do \
+	  echo Run: $$f; \
 	  ./$$f; \
 	done
 
