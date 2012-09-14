@@ -839,7 +839,7 @@ libstdc++.so_LIBS=$(LIBGCC) $(LIBSUPCXX) $(LIBGCC)
 
 DYNAMIC_LIBSTDCXX=$(libstdc++.so_LIB) \
 	$(LIBGCC) $(LIBSUPCXX) $(LIBGCC) \
-	$(libc.so_LIB)
+	$(libc.so_LIB) $(libdl.so_LIB)
 
 STATIC_LIBSTDCXX=$(libstdc++.a_LIB) \
 	$(LIBGCC) $(LIBSUPCXX) $(LIBGCC) \
